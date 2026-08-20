@@ -1,0 +1,17 @@
+{
+  "name": "mukking-app",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "mobile",
+    "server",
+    "admin",
+    "shared"
+  ],
+  "scripts": {
+    "dev:mobile": "pnpm --filter @mukking/mobile run start",
+    "dev:server": "pnpm --filter @mukking/server run dev",
+    "dev:admin": "pnpm --filter @mukking/admin run dev",
+    "typecheck": "pnpm -r run typecheck"
+  }
+}
