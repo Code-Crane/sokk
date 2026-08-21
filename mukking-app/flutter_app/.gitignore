@@ -1,0 +1,30 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+coverage/
+
+# Native generated output
+android/.gradle/
+android/local.properties
+android/app/build/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Pods/
+ios/.symlinks/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Local environment
+.env
+.env.local
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision
