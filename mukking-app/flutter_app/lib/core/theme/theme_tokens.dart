@@ -36,6 +36,12 @@ class MukkingThemeTokens extends ThemeExtension<MukkingThemeTokens> {
     required this.success,
     required this.warning,
     required this.danger,
+    required this.favorite,
+    required this.partyHot,
+    required this.partyUrgent,
+    required this.mapMarker,
+    required this.rewardXp,
+    required this.rewardPoint,
   });
 
   final Color primary;
@@ -48,6 +54,12 @@ class MukkingThemeTokens extends ThemeExtension<MukkingThemeTokens> {
   final Color success;
   final Color warning;
   final Color danger;
+  final Color favorite;
+  final Color partyHot;
+  final Color partyUrgent;
+  final Color mapMarker;
+  final Color rewardXp;
+  final Color rewardPoint;
 
   @override
   MukkingThemeTokens copyWith({
@@ -61,6 +73,12 @@ class MukkingThemeTokens extends ThemeExtension<MukkingThemeTokens> {
     Color? success,
     Color? warning,
     Color? danger,
+    Color? favorite,
+    Color? partyHot,
+    Color? partyUrgent,
+    Color? mapMarker,
+    Color? rewardXp,
+    Color? rewardPoint,
   }) {
     return MukkingThemeTokens(
       primary: primary ?? this.primary,
@@ -73,6 +91,12 @@ class MukkingThemeTokens extends ThemeExtension<MukkingThemeTokens> {
       success: success ?? this.success,
       warning: warning ?? this.warning,
       danger: danger ?? this.danger,
+      favorite: favorite ?? this.favorite,
+      partyHot: partyHot ?? this.partyHot,
+      partyUrgent: partyUrgent ?? this.partyUrgent,
+      mapMarker: mapMarker ?? this.mapMarker,
+      rewardXp: rewardXp ?? this.rewardXp,
+      rewardPoint: rewardPoint ?? this.rewardPoint,
     );
   }
 
@@ -96,6 +120,12 @@ class MukkingThemeTokens extends ThemeExtension<MukkingThemeTokens> {
       success: Color.lerp(success, other.success, t)!,
       warning: Color.lerp(warning, other.warning, t)!,
       danger: Color.lerp(danger, other.danger, t)!,
+      favorite: Color.lerp(favorite, other.favorite, t)!,
+      partyHot: Color.lerp(partyHot, other.partyHot, t)!,
+      partyUrgent: Color.lerp(partyUrgent, other.partyUrgent, t)!,
+      mapMarker: Color.lerp(mapMarker, other.mapMarker, t)!,
+      rewardXp: Color.lerp(rewardXp, other.rewardXp, t)!,
+      rewardPoint: Color.lerp(rewardPoint, other.rewardPoint, t)!,
     );
   }
 }

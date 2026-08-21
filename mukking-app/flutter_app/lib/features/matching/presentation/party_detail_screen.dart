@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
-import '../data/mock_party_repository.dart';
+import '../../discovery/providers/discovery_provider.dart';
+import '../domain/matching_party.dart';
+import '../providers/matching_provider.dart';
 
 class PartyDetailScreen extends ConsumerWidget {
   const PartyDetailScreen({
@@ -23,13 +25,25 @@ class PartyDetailScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(20),
         children: [
           MukkingCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('파티를 찾을 수 없어요', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 8),
-                Text('mock 데이터에 없는 파티 ID입니다.', style: Theme.of(context).textTheme.bodyMedium),
-              ],
+            child: Text(
+              '파티를 찾을 수 없어요. mock 데이터에 없는 파티 ID입니다.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final restaurant = ref.watch(restaurantByIdProvider(party.restaurantId));
+
+    if (restaurant == null) {
+      return ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          MukkingCard(
+            child: Text(
+              '식당 정보를 찾을 수 없어요.',
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
         ],
@@ -57,13 +71,13 @@ class PartyDetailScreen extends ConsumerWidget {
         ),
         const SizedBox(height: 8),
         Container(
-          height: 250,
+          height: 260,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(32),
             gradient: LinearGradient(
               colors: [
-                tokens.primary,
-                tokens.secondary,
+                tokens.secondary.withValues(alpha: 0.94),
+                tokens.primary.withValues(alpha: 0.84),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -72,6 +86,15 @@ class PartyDetailScreen extends ConsumerWidget {
           child: Stack(
             children: [
               Positioned(
+                right: -26,
+                bottom: -28,
+                child: Icon(
+                  Icons.restaurant_rounded,
+                  color: tokens.surface.withValues(alpha: 0.16),
+                  size: 160,
+                ),
+              ),
+              Positioned(
                 left: 22,
                 bottom: 22,
                 right: 22,
@@ -79,16 +102,18 @@ class PartyDetailScreen extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      party.imageLabel,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            color: tokens.surface,
-                          ),
+                      restaurant.imageLabel,
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                color: tokens.surface,
+                              ),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '음식/식당 사진 placeholder',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.surface.withValues(alpha: 0.86),
+                      '${restaurant.name} · ${restaurant.category}',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: tokens.surface.withValues(alpha: 0.9),
+                            fontWeight: FontWeight.w800,
                           ),
                     ),
                   ],
@@ -102,20 +127,64 @@ class PartyDetailScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(party.title, style: Theme.of(context).textTheme.headlineSmall),
+              _StatusPill(status: party.status),
+              const SizedBox(height: 12),
+              Text(
+                party.title,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
               const SizedBox(height: 8),
               Text(
-                party.restaurantName,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: tokens.primary,
-                    ),
+                restaurant.address,
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 16),
-              _DetailRow(icon: Icons.schedule_rounded, label: '날짜/시간', value: party.scheduledLabel),
-              _DetailRow(icon: Icons.place_rounded, label: '지역', value: party.region),
-              _DetailRow(icon: Icons.people_alt_rounded, label: '모집 인원', value: party.participantLabel),
-              _DetailRow(icon: Icons.workspace_premium_rounded, label: '보상', value: '+${party.rewardXp} XP'),
-              _DetailRow(icon: Icons.person_rounded, label: '파티장', value: party.hostName),
+              _DetailRow(
+                icon: Icons.schedule_rounded,
+                label: '날짜/시간',
+                value: party.scheduledLabel,
+              ),
+              _DetailRow(
+                icon: Icons.place_rounded,
+                label: '지역/거리',
+                value:
+                    '${restaurant.address.split(' ').take(2).join(' ')} · ${party.distanceLabel}',
+              ),
+              _DetailRow(
+                icon: Icons.people_alt_rounded,
+                label: '모집 인원',
+                value: party.memberLabel,
+              ),
+              _DetailRow(
+                icon: Icons.person_rounded,
+                label: '파티장',
+                value: party.hostName,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        MukkingCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('획득 가능한 보상', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _RewardPanel(
+                    icon: Icons.bolt_rounded,
+                    label: '+${party.rewardXp} XP',
+                    color: tokens.rewardXp,
+                  ),
+                  const SizedBox(width: 10),
+                  _RewardPanel(
+                    icon: Icons.toll_rounded,
+                    label: '+${party.rewardPoints}P',
+                    color: tokens.rewardPoint,
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -166,7 +235,8 @@ class PartyDetailScreen extends ConsumerWidget {
             children: [
               Text('파티 소개', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
-              Text(party.description, style: Theme.of(context).textTheme.bodyLarge),
+              Text(party.description,
+                  style: Theme.of(context).textTheme.bodyLarge),
               const SizedBox(height: 14),
               Container(
                 width: double.infinity,
@@ -176,10 +246,10 @@ class PartyDetailScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: Text(
-                  '신고/차단 메뉴 영역: 실제 기능은 추후 연결',
+                  '신고/차단 메뉴 placeholder · 실제 기능은 다음 단계에서 연결',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: tokens.danger,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                       ),
                 ),
               ),
@@ -193,6 +263,70 @@ class PartyDetailScreen extends ConsumerWidget {
           label: const Text('파티 참가하기'),
         ),
       ],
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.status});
+
+  final MatchingPartyStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    final color = switch (status) {
+      MatchingPartyStatus.hot => tokens.partyHot,
+      MatchingPartyStatus.urgent => tokens.partyUrgent,
+      MatchingPartyStatus.full => tokens.textSecondary,
+      MatchingPartyStatus.open => tokens.success,
+    };
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          status.label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color),
+        ),
+      ),
+    );
+  }
+}
+
+class _RewardPanel extends StatelessWidget {
+  const _RewardPanel({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 8),
+            Text(label, style: Theme.of(context).textTheme.labelLarge),
+          ],
+        ),
+      ),
     );
   }
 }

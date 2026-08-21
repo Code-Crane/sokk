@@ -35,7 +35,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.createParty,
             pageBuilder: (context, state) {
-              return const NoTransitionPage(child: CreatePartyScreen());
+              return NoTransitionPage(
+                child: CreatePartyScreen(
+                  restaurantId: state.uri.queryParameters['restaurantId'],
+                ),
+              );
             },
           ),
           GoRoute(

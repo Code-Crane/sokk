@@ -1,29 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
-import '../../../core/router/app_routes.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
-import '../data/mock_restaurant_repository.dart';
+import '../../matching/domain/matching_party.dart';
+import '../../matching/providers/matching_provider.dart';
 import '../domain/restaurant.dart';
+import '../providers/discovery_provider.dart';
+import 'restaurant_bottom_sheet.dart';
 
-class DiscoveryScreen extends ConsumerStatefulWidget {
+class DiscoveryScreen extends ConsumerWidget {
   const DiscoveryScreen({super.key});
 
   @override
-  ConsumerState<DiscoveryScreen> createState() => _DiscoveryScreenState();
-}
-
-class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
-  Restaurant? _selectedRestaurant;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
-    final restaurants = ref.watch(nearbyRestaurantsProvider);
-    final selectedRestaurant = _selectedRestaurant ?? restaurants.first;
+    final categories = ref.watch(discoveryCategoriesProvider);
+    final selectedCategory = ref.watch(selectedCategoryProvider);
+    final restaurants = ref.watch(filteredRestaurantsProvider);
+    final selectedRestaurant = ref.watch(selectedRestaurantProvider);
+    final parties = ref.watch(matchingPartiesProvider);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -34,10 +31,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '발견',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
+                  Text('발견', style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 4),
                   Text(
                     AppConstants.defaultRegion,
@@ -49,7 +43,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
             FilledButton.tonalIcon(
               onPressed: () {},
               icon: const Icon(Icons.my_location_rounded),
-              label: const Text('지역'),
+              label: const Text('지역 선택'),
             ),
           ],
         ),
@@ -57,22 +51,52 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
         TextField(
           decoration: InputDecoration(
             prefixIcon: Icon(Icons.search_rounded, color: tokens.primary),
-            hintText: '식당, 음식, 지역 검색',
+            hintText: '맛집, 음식, 지역 검색',
+          ),
+        ),
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final category in categories) ...[
+                ChoiceChip(
+                  selected: selectedCategory == category,
+                  label: Text(category),
+                  onSelected: (_) {
+                    ref.read(selectedCategoryProvider.notifier).state =
+                        category;
+                    ref.read(selectedRestaurantIdProvider.notifier).state =
+                        null;
+                  },
+                ),
+                const SizedBox(width: 8),
+              ],
+            ],
           ),
         ),
         const SizedBox(height: 16),
         _MapPlaceholder(
           restaurants: restaurants,
+          parties: parties,
           selectedRestaurant: selectedRestaurant,
           onSelect: (restaurant) {
-            setState(() => _selectedRestaurant = restaurant);
+            ref.read(selectedRestaurantIdProvider.notifier).state =
+                restaurant.id;
           },
         ),
+        const SizedBox(height: 12),
+        const _MapLegendRow(),
         const SizedBox(height: 16),
-        _RestaurantBottomPanel(
-          restaurant: selectedRestaurant,
-          onCreateParty: () => context.go(AppRoutes.createParty),
-        ),
+        if (selectedRestaurant != null)
+          RestaurantBottomSheet(restaurant: selectedRestaurant)
+        else
+          MukkingCard(
+            child: Text(
+              '선택 가능한 식당이 없어요. 카테고리 필터를 변경해보세요.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
       ],
     );
   }
@@ -81,12 +105,14 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
 class _MapPlaceholder extends StatelessWidget {
   const _MapPlaceholder({
     required this.restaurants,
+    required this.parties,
     required this.selectedRestaurant,
     required this.onSelect,
   });
 
   final List<Restaurant> restaurants;
-  final Restaurant selectedRestaurant;
+  final List<MatchingParty> parties;
+  final Restaurant? selectedRestaurant;
   final ValueChanged<Restaurant> onSelect;
 
   @override
@@ -96,7 +122,7 @@ class _MapPlaceholder extends StatelessWidget {
     return MukkingCard(
       padding: EdgeInsets.zero,
       child: SizedBox(
-        height: 330,
+        height: 348,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(28),
           child: LayoutBuilder(
@@ -108,7 +134,7 @@ class _MapPlaceholder extends StatelessWidget {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            tokens.secondary.withValues(alpha: 0.2),
+                            tokens.mapMarker.withValues(alpha: 0.18),
                             tokens.background,
                           ],
                           begin: Alignment.topLeft,
@@ -120,17 +146,17 @@ class _MapPlaceholder extends StatelessWidget {
                   Positioned(
                     left: 18,
                     top: 18,
-                    child: _MapLegend(
-                      title: '지도 SDK 예정 영역',
-                      subtitle: 'Naver Map은 아직 연결하지 않음',
+                    child: _MapFloatingLabel(
+                      title: '지도 placeholder',
+                      subtitle: 'Naver Map SDK는 아직 연결하지 않음',
                     ),
                   ),
                   Positioned(
                     right: 18,
                     bottom: 18,
-                    child: _MapLegend(
-                      title: 'Restaurant markers',
-                      subtitle: 'mock 위치 데이터',
+                    child: _MapFloatingLabel(
+                      title: 'Mock markers',
+                      subtitle: '찜/파티/마감 상태 반영',
                     ),
                   ),
                   for (final restaurant in restaurants)
@@ -139,7 +165,8 @@ class _MapPlaceholder extends StatelessWidget {
                       top: restaurant.markerDy * constraints.maxHeight,
                       child: _RestaurantMarker(
                         restaurant: restaurant,
-                        isSelected: restaurant.id == selectedRestaurant.id,
+                        status: _markerStatus(restaurant, parties),
+                        isSelected: restaurant.id == selectedRestaurant?.id,
                         onTap: () => onSelect(restaurant),
                       ),
                     ),
@@ -151,10 +178,32 @@ class _MapPlaceholder extends StatelessWidget {
       ),
     );
   }
+
+  _RestaurantMarkerStatus _markerStatus(
+    Restaurant restaurant,
+    List<MatchingParty> parties,
+  ) {
+    if (restaurant.isFavorite) {
+      return _RestaurantMarkerStatus.favorite;
+    }
+
+    final restaurantParties =
+        parties.where((party) => party.restaurantId == restaurant.id);
+
+    if (restaurantParties.any((party) => party.isUrgent)) {
+      return _RestaurantMarkerStatus.urgentParty;
+    }
+
+    if (restaurantParties.isNotEmpty) {
+      return _RestaurantMarkerStatus.activeParty;
+    }
+
+    return _RestaurantMarkerStatus.normal;
+  }
 }
 
-class _MapLegend extends StatelessWidget {
-  const _MapLegend({
+class _MapFloatingLabel extends StatelessWidget {
+  const _MapFloatingLabel({
     required this.title,
     required this.subtitle,
   });
@@ -169,7 +218,7 @@ class _MapLegend extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: tokens.surface.withValues(alpha: 0.88),
+        color: tokens.surface.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -184,20 +233,35 @@ class _MapLegend extends StatelessWidget {
   }
 }
 
+enum _RestaurantMarkerStatus {
+  normal,
+  favorite,
+  activeParty,
+  urgentParty;
+}
+
 class _RestaurantMarker extends StatelessWidget {
   const _RestaurantMarker({
     required this.restaurant,
+    required this.status,
     required this.isSelected,
     required this.onTap,
   });
 
   final Restaurant restaurant;
+  final _RestaurantMarkerStatus status;
   final bool isSelected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
+    final markerColor = switch (status) {
+      _RestaurantMarkerStatus.urgentParty => tokens.partyUrgent,
+      _RestaurantMarkerStatus.activeParty => tokens.partyHot,
+      _RestaurantMarkerStatus.favorite => tokens.favorite,
+      _RestaurantMarkerStatus.normal => tokens.mapMarker,
+    };
 
     return GestureDetector(
       onTap: onTap,
@@ -205,8 +269,9 @@ class _RestaurantMarker extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
-          color: isSelected ? tokens.primary : tokens.surface,
+          color: isSelected ? markerColor : tokens.surface,
           borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: markerColor.withValues(alpha: 0.48)),
           boxShadow: [
             BoxShadow(
               color: tokens.textPrimary.withValues(alpha: 0.12),
@@ -219,8 +284,10 @@ class _RestaurantMarker extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.location_on_rounded,
-              color: isSelected ? tokens.surface : tokens.primary,
+              status == _RestaurantMarkerStatus.favorite
+                  ? Icons.favorite_rounded
+                  : Icons.location_on_rounded,
+              color: isSelected ? tokens.surface : markerColor,
               size: 18,
             ),
             const SizedBox(width: 4),
@@ -237,91 +304,46 @@ class _RestaurantMarker extends StatelessWidget {
   }
 }
 
-class _RestaurantBottomPanel extends StatelessWidget {
-  const _RestaurantBottomPanel({
-    required this.restaurant,
-    required this.onCreateParty,
-  });
-
-  final Restaurant restaurant;
-  final VoidCallback onCreateParty;
+class _MapLegendRow extends StatelessWidget {
+  const _MapLegendRow();
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
 
-    return MukkingCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: tokens.secondary.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Icon(
-                  Icons.ramen_dining_rounded,
-                  color: tokens.primary,
-                  size: 34,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      restaurant.name,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${restaurant.region} · ${restaurant.category} · ${restaurant.distanceLabel}',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${restaurant.waitingSignal} · 진행 중 파티 ${restaurant.partyCount}개',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.primary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.favorite_border_rounded),
-                  label: const Text('가고 싶어요'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: onCreateParty,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('파티 만들기'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            '향후 흐름: 식당 발견 → 관심 저장 → 파티 생성 알림 → 파티 참여',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ],
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _LegendChip(label: '일반', color: tokens.mapMarker),
+        _LegendChip(label: '찜', color: tokens.favorite),
+        _LegendChip(label: '파티', color: tokens.partyHot),
+        _LegendChip(label: '마감 임박', color: tokens.partyUrgent),
+      ],
+    );
+  }
+}
+
+class _LegendChip extends StatelessWidget {
+  const _LegendChip({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color),
       ),
     );
   }

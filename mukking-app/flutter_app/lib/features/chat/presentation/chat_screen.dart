@@ -36,7 +36,8 @@ class ChatScreen extends StatelessWidget {
             children: [
               Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
                     color: tokens.secondary.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(999),
@@ -52,7 +53,8 @@ class ChatScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('약속/파티 카드', style: Theme.of(context).textTheme.titleMedium),
+                    Text('약속/파티 카드',
+                        style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     Text(
                       '멘야 하쿠 · 8/22 19:30 · 2/4명 · +120 XP',
@@ -87,7 +89,8 @@ class ChatScreen extends StatelessWidget {
                   enabled: false,
                   decoration: InputDecoration(
                     hintText: '메시지 입력은 추후 realtime 연결',
-                    prefixIcon: Icon(Icons.lock_outline_rounded, color: tokens.textSecondary),
+                    prefixIcon: Icon(Icons.lock_outline_rounded,
+                        color: tokens.textSecondary),
                   ),
                 ),
               ),

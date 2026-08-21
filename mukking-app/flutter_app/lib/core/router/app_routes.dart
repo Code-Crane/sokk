@@ -9,4 +9,15 @@ class AppRoutes {
   static const partyDetail = '/party/:partyId';
 
   static String partyDetailPath(String partyId) => '/party/$partyId';
+
+  static String createPartyPath({String? restaurantId}) {
+    if (restaurantId == null) {
+      return createParty;
+    }
+
+    return Uri(
+      path: createParty,
+      queryParameters: {'restaurantId': restaurantId},
+    ).toString();
+  }
 }
