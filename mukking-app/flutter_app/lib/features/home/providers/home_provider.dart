@@ -6,9 +6,9 @@ import '../../matching/providers/matching_provider.dart';
 
 final favoriteRestaurantPartiesProvider = Provider<List<MatchingParty>>((ref) {
   final favoriteIds = ref.watch(favoriteRestaurantIdsProvider);
+  final parties = ref.watch(matchingPartiesProvider).valueOrNull ?? const [];
 
-  return ref
-      .watch(matchingPartiesProvider)
+  return parties
       .where((party) => favoriteIds.contains(party.restaurantId))
       .toList();
 });

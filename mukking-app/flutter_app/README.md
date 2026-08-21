@@ -69,12 +69,28 @@ iOS 실기기/TestFlight 개발은 macOS + Xcode + Apple Developer 계정이 필
 ```bash
 flutter run \
   --dart-define=MUKKING_API_BASE_URL=http://localhost:4000 \
+  --dart-define=MUKKING_DATA_PROVIDER=mock \
   --dart-define=MUKKING_SUPABASE_URL=https://example.supabase.co \
   --dart-define=MUKKING_SUPABASE_ANON_KEY=public-anon-key
 ```
 
-현재 첫 마일스톤에서는 실제 서버 연결을 크게 붙이지 않고,
-UI / Navigation / Theme 기반과 mock data만 사용합니다.
+데이터 소스:
+
+- `MUKKING_DATA_PROVIDER=mock`: 로컬 mock data로 UI 확인
+- `MUKKING_DATA_PROVIDER=api`: 기존 Node/Express `/api` endpoint 호출
+
+API 모드 예시:
+
+```bash
+flutter run -d chrome \
+  --dart-define=MUKKING_DATA_PROVIDER=api \
+  --dart-define=MUKKING_API_BASE_URL=http://localhost:4000 \
+  --dart-define=MUKKING_SUPABASE_URL=https://example.supabase.co \
+  --dart-define=MUKKING_SUPABASE_ANON_KEY=public-anon-key
+```
+
+Flutter bundle에는 Supabase service role key를 넣지 않습니다.
+클라이언트에는 공개 가능한 Supabase URL과 anon key만 사용합니다.
 
 ## Project structure
 

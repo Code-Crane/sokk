@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/network/api_error.dart';
 import '../../../core/router/app_routes.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mission_card.dart';
@@ -100,15 +101,22 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
-        if (notifications.isNotEmpty)
-          MockNotificationCard(
-            notification: notifications.first,
-            onTap: () => context.push(
-              AppRoutes.partyDetailPath(notifications.first.partyId),
-            ),
-          )
-        else
-          const MissionCard(),
+        notifications.when(
+          data: (items) {
+            if (items.isEmpty) {
+              return const MissionCard();
+            }
+
+            return MockNotificationCard(
+              notification: items.first,
+              onTap: () => context.push(
+                AppRoutes.partyDetailPath(items.first.partyId),
+              ),
+            );
+          },
+          loading: () => const MissionCard(),
+          error: (_, __) => const MissionCard(),
+        ),
         const SizedBox(height: 24),
         SectionHeader(
           title: '인기 파티',
@@ -116,7 +124,7 @@ class HomeScreen extends ConsumerWidget {
           onActionTap: () => context.go(AppRoutes.discovery),
         ),
         const SizedBox(height: 12),
-        _PartySection(
+        _AsyncPartySection(
           parties: popularParties,
           emptyMessage: '인기 파티가 아직 없어요.',
         ),
@@ -139,7 +147,7 @@ class HomeScreen extends ConsumerWidget {
           onActionTap: () => context.go(AppRoutes.discovery),
         ),
         const SizedBox(height: 12),
-        _PartySection(
+        _AsyncPartySection(
           parties: urgentParties,
           emptyMessage: '마감 임박 파티가 아직 없어요.',
           compact: true,
@@ -176,6 +184,31 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
+class _AsyncPartySection extends StatelessWidget {
+  const _AsyncPartySection({
+    required this.parties,
+    required this.emptyMessage,
+    this.compact = false,
+  });
+
+  final AsyncValue<List<MatchingParty>> parties;
+  final String emptyMessage;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return parties.when(
+      data: (items) => _PartySection(
+        parties: items,
+        emptyMessage: emptyMessage,
+        compact: compact,
+      ),
+      loading: () => const _LoadingPartyCard(),
+      error: (error, _) => _PartyErrorCard(error: error),
+    );
+  }
+}
+
 class _PartySection extends ConsumerWidget {
   const _PartySection({
     required this.parties,
@@ -205,6 +238,34 @@ class _PartySection extends ConsumerWidget {
           const SizedBox(height: 14),
         ],
       ],
+    );
+  }
+}
+
+class _LoadingPartyCard extends StatelessWidget {
+  const _LoadingPartyCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return const MukkingCard(
+      child: Text('파티 정보를 불러오는 중이에요.'),
+    );
+  }
+}
+
+class _PartyErrorCard extends StatelessWidget {
+  const _PartyErrorCard({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = error is ApiError
+        ? (error as ApiError).userMessage
+        : '파티 정보를 불러오지 못했어요.';
+
+    return MukkingCard(
+      child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
     );
   }
 }

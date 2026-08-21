@@ -20,7 +20,7 @@ class DiscoveryScreen extends ConsumerWidget {
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final restaurants = ref.watch(filteredRestaurantsProvider);
     final selectedRestaurant = ref.watch(selectedRestaurantProvider);
-    final parties = ref.watch(matchingPartiesProvider);
+    final parties = ref.watch(matchingPartiesProvider).valueOrNull ?? const [];
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),

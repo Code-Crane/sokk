@@ -4,9 +4,10 @@ import '../../discovery/providers/discovery_provider.dart';
 import '../../matching/providers/matching_provider.dart';
 import '../domain/mock_notification.dart';
 
-final mockNotificationsProvider = Provider<List<MockNotification>>((ref) {
+final mockNotificationsProvider =
+    FutureProvider<List<MockNotification>>((ref) async {
   final favoriteIds = ref.watch(favoriteRestaurantIdsProvider);
-  final parties = ref.watch(matchingPartiesProvider);
+  final parties = await ref.watch(matchingPartiesProvider.future);
 
   return parties
       .where((party) => favoriteIds.contains(party.restaurantId))

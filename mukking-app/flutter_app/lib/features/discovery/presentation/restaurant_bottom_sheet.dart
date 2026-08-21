@@ -20,7 +20,8 @@ class RestaurantBottomSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
-    final parties = ref.watch(partiesByRestaurantProvider(restaurant.id));
+    final partiesAsync = ref.watch(partiesByRestaurantProvider(restaurant.id));
+    final parties = partiesAsync.valueOrNull ?? const [];
     final firstParty = parties.isEmpty ? null : parties.first;
 
     return MukkingCard(
@@ -83,12 +84,24 @@ class RestaurantBottomSheet extends ConsumerWidget {
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 6),
-                    Text(
-                      '현재 모집 중 파티 ${restaurant.activePartyCount}개',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.primary,
-                            fontWeight: FontWeight.w800,
-                          ),
+                    partiesAsync.when(
+                      data: (items) => Text(
+                        '현재 모집 중 파티 ${items.length}개',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: tokens.primary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      loading: () => Text(
+                        '파티 수 확인 중',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      error: (_, __) => Text(
+                        '파티 수를 불러오지 못했어요',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: tokens.danger,
+                            ),
+                      ),
                     ),
                   ],
                 ),

@@ -19,9 +19,15 @@ final baseRestaurantsProvider = Provider<List<Restaurant>>((ref) {
 
 final restaurantsProvider = Provider<List<Restaurant>>((ref) {
   final favorites = ref.watch(favoriteRestaurantIdsProvider);
-  final parties = ref.watch(matchingPartiesProvider);
+  final parties = ref.watch(matchingPartiesProvider).valueOrNull ?? const [];
+  final apiRestaurants = ref.watch(matchingRestaurantsProvider).valueOrNull ??
+      const <Restaurant>[];
+  final restaurants = [
+    ...ref.watch(baseRestaurantsProvider),
+    ...apiRestaurants,
+  ];
 
-  return ref.watch(baseRestaurantsProvider).map((restaurant) {
+  return restaurants.map((restaurant) {
     final activePartyCount = parties
         .where((party) => party.restaurantId == restaurant.id)
         .where((party) => party.currentMembers < party.maxMembers)
