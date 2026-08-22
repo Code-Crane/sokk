@@ -1,0 +1,26 @@
+import type { RepositoryRegistry } from "../interfaces/repository-registry";
+import { memoryAdminRepository } from "./admin.memory.repository";
+import { memoryAuthRepository } from "./auth.memory.repository";
+import { memoryBlockRepository } from "./block.memory.repository";
+import { memoryChatRepository } from "./chat.memory.repository";
+import { memoryLocationRepository } from "./location.memory.repository";
+import { memoryMatchingRepository } from "./matching.memory.repository";
+import { memoryRatingRepository } from "./rating.memory.repository";
+import { memoryReportRepository } from "./report.memory.repository";
+import { memorySanctionRepository } from "./sanction.memory.repository";
+import { memoryUserRepository } from "./user.memory.repository";
+import { memoryVerificationRepository } from "./verification.memory.repository";
+
+export const memoryRepositories: RepositoryRegistry = {
+  admin: memoryAdminRepository,
+  auth: memoryAuthRepository,
+  blocks: memoryBlockRepository,
+  chat: memoryChatRepository,
+  location: memoryLocationRepository,
+  matching: memoryMatchingRepository,
+  rating: memoryRatingRepository,
+  reports: memoryReportRepository,
+  sanctions: memorySanctionRepository,
+  users: memoryUserRepository,
+  verification: memoryVerificationRepository
+};
