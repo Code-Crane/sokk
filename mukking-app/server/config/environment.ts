@@ -88,6 +88,10 @@ export const environment = {
       windowMs: readNumber("RATE_LIMIT_BLOCK_CREATE_WINDOW_MS", defaultRateLimitWindowMs),
       max: readNumber("RATE_LIMIT_BLOCK_CREATE_MAX", 20)
     },
+    restaurantWrite: {
+      windowMs: readNumber("RATE_LIMIT_RESTAURANT_WRITE_WINDOW_MS", defaultRateLimitWindowMs),
+      max: readNumber("RATE_LIMIT_RESTAURANT_WRITE_MAX", 30)
+    },
     adminAuth: {
       windowMs: readNumber("RATE_LIMIT_ADMIN_AUTH_WINDOW_MS", defaultRateLimitWindowMs),
       max: readNumber("RATE_LIMIT_ADMIN_AUTH_MAX", 60)

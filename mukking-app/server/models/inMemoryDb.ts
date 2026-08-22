@@ -19,5 +19,10 @@ export const db = {
   chatMessages: new Map<string, ChatMessage[]>(),
   pendingEvaluations: new Map<string, PendingEvaluation>(),
   mannerRatings: new Map<string, MannerRating>(),
-  reports: new Map<string, UserReport>()
+  reports: new Map<string, UserReport>(),
+  restaurants: new Map<string, import("../../shared/types").Restaurant>(),
+  restaurantFavorites: new Map<
+    string,
+    import("../../shared/types").RestaurantFavorite
+  >()
 };

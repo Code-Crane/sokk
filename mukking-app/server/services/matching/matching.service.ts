@@ -27,6 +27,14 @@ export async function createMatchingPost(
 ): Promise<MatchingPost> {
   await assertCanUseMatching(authorId);
 
+  if (input.restaurantId) {
+    const restaurant = await repositories.restaurants.findById(input.restaurantId);
+
+    if (!restaurant) {
+      throw Object.assign(new Error("Restaurant not found."), { statusCode: 404 });
+    }
+  }
+
   if (!input.restaurantName || !input.address || !input.scheduledAt || !input.intro) {
     throw Object.assign(new Error("restaurantName, address, scheduledAt, and intro are required."), {
       statusCode: 400

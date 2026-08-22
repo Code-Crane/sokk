@@ -51,6 +51,7 @@ export const memoryMatchingRepository: MatchingRepository = {
     const post: MatchingPost = {
       id: createEntityId("post"),
       authorId,
+      restaurantId: input.restaurantId,
       restaurantName: input.restaurantName,
       address: input.address,
       location: input.location,
@@ -76,6 +77,8 @@ export const memoryMatchingRepository: MatchingRepository = {
 
     const updated: MatchingPost = {
       ...post,
+      restaurantId:
+        input.restaurantId === null ? undefined : input.restaurantId ?? post.restaurantId,
       restaurantName: input.restaurantName ?? post.restaurantName,
       address: input.address ?? post.address,
       location:

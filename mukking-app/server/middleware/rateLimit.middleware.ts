@@ -100,6 +100,11 @@ export const blockCreateRateLimit = createRateLimitMiddleware({
   ...environment.rateLimits.blockCreate
 });
 
+export const restaurantWriteRateLimit = createRateLimitMiddleware({
+  name: "restaurant.write",
+  ...environment.rateLimits.restaurantWrite
+});
+
 export const adminAuthRateLimit = createRateLimitMiddleware({
   name: "admin.auth",
   ...environment.rateLimits.adminAuth

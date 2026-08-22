@@ -7,6 +7,8 @@ import { memoryLocationRepository } from "./location.memory.repository";
 import { memoryMatchingRepository } from "./matching.memory.repository";
 import { memoryRatingRepository } from "./rating.memory.repository";
 import { memoryReportRepository } from "./report.memory.repository";
+import { memoryRestaurantFavoriteRepository } from "./restaurant-favorite.memory.repository";
+import { memoryRestaurantRepository } from "./restaurant.memory.repository";
 import { memorySanctionRepository } from "./sanction.memory.repository";
 import { memoryUserRepository } from "./user.memory.repository";
 import { memoryVerificationRepository } from "./verification.memory.repository";
@@ -20,6 +22,8 @@ export const memoryRepositories: RepositoryRegistry = {
   matching: memoryMatchingRepository,
   rating: memoryRatingRepository,
   reports: memoryReportRepository,
+  restaurantFavorites: memoryRestaurantFavoriteRepository,
+  restaurants: memoryRestaurantRepository,
   sanctions: memorySanctionRepository,
   users: memoryUserRepository,
   verification: memoryVerificationRepository

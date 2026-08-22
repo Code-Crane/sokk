@@ -7,6 +7,7 @@ import { healthRoutes } from "./health.routes";
 import { matchingRoutes } from "./matching.routes";
 import { ratingRoutes } from "./rating.routes";
 import { reportRoutes } from "./report.routes";
+import { restaurantRoutes } from "./restaurant.routes";
 
 export const routes = Router();
 
@@ -18,3 +19,4 @@ routes.use("/matching", matchingRoutes);
 routes.use("/chat", chatRoutes);
 routes.use("/rating", ratingRoutes);
 routes.use("/reports", reportRoutes);
+routes.use("/restaurants", restaurantRoutes);

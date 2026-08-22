@@ -14,6 +14,7 @@ export interface MatchingPostFilter extends RepositoryListOptions {
 }
 
 export interface UpdateMatchingPostInput {
+  restaurantId?: string | null;
   restaurantName?: string;
   address?: string;
   location?: CreateMatchingPostInput["location"] | null;

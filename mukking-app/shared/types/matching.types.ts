@@ -9,6 +9,11 @@ export interface GeoPoint {
 export interface MatchingPost {
   id: string;
   authorId: string;
+  /**
+   * Optional during the migration from legacy restaurantName/address posts.
+   * New restaurant-backed parties should supply this value.
+   */
+  restaurantId?: string;
   restaurantName: string;
   address: string;
   location?: GeoPoint;
@@ -23,6 +28,7 @@ export interface MatchingPost {
 }
 
 export interface CreateMatchingPostInput {
+  restaurantId?: string;
   restaurantName: string;
   address: string;
   location?: GeoPoint;
