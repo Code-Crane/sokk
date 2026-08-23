@@ -5,6 +5,7 @@ import type {
   MatchingPost,
   MannerRating,
   PendingEvaluation,
+  UserNotification,
   UserAccount,
   UserReport,
   VerificationClaim
@@ -19,6 +20,7 @@ export const db = {
   chatMessages: new Map<string, ChatMessage[]>(),
   pendingEvaluations: new Map<string, PendingEvaluation>(),
   mannerRatings: new Map<string, MannerRating>(),
+  notifications: new Map<string, UserNotification>(),
   reports: new Map<string, UserReport>(),
   restaurants: new Map<string, import("../../shared/types").Restaurant>(),
   restaurantFavorites: new Map<

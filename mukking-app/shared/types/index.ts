@@ -1,5 +1,6 @@
 export * from "./chat.types";
 export * from "./matching.types";
+export * from "./notification.types";
 export * from "./rating.types";
 export * from "./report.types";
 export * from "./restaurant.types";

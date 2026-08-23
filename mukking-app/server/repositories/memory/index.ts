@@ -5,6 +5,7 @@ import { memoryBlockRepository } from "./block.memory.repository";
 import { memoryChatRepository } from "./chat.memory.repository";
 import { memoryLocationRepository } from "./location.memory.repository";
 import { memoryMatchingRepository } from "./matching.memory.repository";
+import { memoryNotificationRepository } from "./notification.memory.repository";
 import { memoryRatingRepository } from "./rating.memory.repository";
 import { memoryReportRepository } from "./report.memory.repository";
 import { memoryRestaurantFavoriteRepository } from "./restaurant-favorite.memory.repository";
@@ -20,6 +21,7 @@ export const memoryRepositories: RepositoryRegistry = {
   chat: memoryChatRepository,
   location: memoryLocationRepository,
   matching: memoryMatchingRepository,
+  notifications: memoryNotificationRepository,
   rating: memoryRatingRepository,
   reports: memoryReportRepository,
   restaurantFavorites: memoryRestaurantFavoriteRepository,

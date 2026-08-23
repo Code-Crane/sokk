@@ -16,6 +16,8 @@
     "smoke:matching": "node scripts/matchingMemorySmoke.cjs",
     "smoke:matching:supabase": "node scripts/matchingSupabasePersistence.cjs",
     "smoke:matching:security": "node scripts/matchingSupabaseSecurity.cjs",
+    "smoke:notifications": "node scripts/notificationMemorySmoke.cjs",
+    "smoke:notifications:supabase": "node scripts/notificationSupabasePersistence.cjs",
     "smoke:chat": "node scripts/chatMemorySmoke.cjs",
     "smoke:chat:supabase": "node scripts/chatSupabasePersistence.cjs",
     "smoke:rating": "node scripts/ratingMemorySmoke.cjs",

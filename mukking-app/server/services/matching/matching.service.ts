@@ -10,6 +10,7 @@ import { repositories } from "../../repositories";
 import { assertCanUseMatching, assertVerifiedUser } from "../auth/auth.service";
 import { assertNoActiveBlockBetween } from "../block/block.service";
 import { createOrUpdateRoomForPost } from "../chat/chat.service";
+import { createFavoriteRestaurantPartyNotifications } from "../notification/notification.service";
 import { createPendingEvaluationsForMatch } from "../rating/rating.service";
 
 export interface RespondJoinRequestResult {
@@ -53,7 +54,19 @@ export async function createMatchingPost(
     });
   }
 
-  return repositories.matching.createPost(authorId, input);
+  const post = await repositories.matching.createPost(authorId, input);
+
+  if (post.restaurantId) {
+    try {
+      await createFavoriteRestaurantPartyNotifications(post);
+    } catch {
+      console.error("[notification] Favorite restaurant party notification creation failed.", {
+        matchingPostId: post.id
+      });
+    }
+  }
+
+  return post;
 }
 
 export async function createJoinRequest(
