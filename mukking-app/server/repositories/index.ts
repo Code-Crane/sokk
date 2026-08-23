@@ -11,6 +11,8 @@ import { supabaseReportRepository } from "./supabase/report.supabase.repository"
 import { supabaseRestaurantFavoriteRepository } from "./supabase/restaurant-favorite.supabase.repository";
 import { supabaseRestaurantRepository } from "./supabase/restaurant.supabase.repository";
 import { supabaseSanctionRepository } from "./supabase/sanction.supabase.repository";
+import { supabaseUserRepository } from "./supabase/user.supabase.repository";
+import { supabaseVerificationRepository } from "./supabase/verification.supabase.repository";
 
 const useSupabaseRepositories = environment.repositoryProvider === "supabase";
 
@@ -46,7 +48,11 @@ export const repositories: RepositoryRegistry = {
     : memoryRepositories.restaurants,
   sanctions: useSupabaseRepositories
     ? supabaseSanctionRepository
-    : memoryRepositories.sanctions
+    : memoryRepositories.sanctions,
+  users: useSupabaseRepositories ? supabaseUserRepository : memoryRepositories.users,
+  verification: useSupabaseRepositories
+    ? supabaseVerificationRepository
+    : memoryRepositories.verification
 };
 
 export type { RepositoryRegistry } from "./interfaces/repository-registry";
