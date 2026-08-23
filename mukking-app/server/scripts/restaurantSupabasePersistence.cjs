@@ -267,6 +267,19 @@ async function main() {
     await new Promise((resolve) => server.close(resolve));
     const service = client(serviceRoleKey);
     if (restaurantId) {
+      // Matching is optional in older DBs. Once its migration is applied,
+      // remove only this script's restaurant-linked test posts before the FK parent.
+      const matchingCleanup = await service
+        .from("matching_posts")
+        .delete()
+        .eq("restaurant_id", restaurantId);
+      if (
+        matchingCleanup.error &&
+        matchingCleanup.error.code !== "42P01" &&
+        matchingCleanup.error.code !== "PGRST205"
+      ) {
+        throw matchingCleanup.error;
+      }
       await service.from("restaurant_favorites").delete().eq("restaurant_id", restaurantId);
       await service.from("restaurants").delete().eq("id", restaurantId);
     }

@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit",
     "security:scan": "node scripts/scanSecrets.cjs",
     "smoke:restaurants": "node scripts/restaurantSmoke.cjs",
-    "smoke:restaurants:supabase": "node scripts/restaurantSupabasePersistence.cjs"
+    "smoke:restaurants:supabase": "node scripts/restaurantSupabasePersistence.cjs",
+    "smoke:matching": "node scripts/matchingMemorySmoke.cjs",
+    "smoke:matching:supabase": "node scripts/matchingSupabasePersistence.cjs",
+    "smoke:matching:security": "node scripts/matchingSupabaseSecurity.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
