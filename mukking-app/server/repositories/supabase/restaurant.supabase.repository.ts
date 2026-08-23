@@ -30,7 +30,9 @@ type RestaurantRow = {
   updated_at: string;
 };
 
-const EARTH_RADIUS_METERS = 6_371_000;
+type NearbyRestaurantRow = RestaurantRow & {
+  distance_meters: number | string;
+};
 
 function toRestaurant(row: RestaurantRow): Restaurant {
   return {
@@ -49,22 +51,6 @@ function toRestaurant(row: RestaurantRow): Restaurant {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
-}
-
-function calculateDistanceMeters(
-  from: { latitude: number; longitude: number },
-  to: Restaurant
-): number {
-  const toRadians = (value: number) => (value * Math.PI) / 180;
-  const latitudeDelta = toRadians(to.latitude - from.latitude);
-  const longitudeDelta = toRadians(to.longitude - from.longitude);
-  const a =
-    Math.sin(latitudeDelta / 2) ** 2 +
-    Math.cos(toRadians(from.latitude)) *
-      Math.cos(toRadians(to.latitude)) *
-      Math.sin(longitudeDelta / 2) ** 2;
-
-  return 2 * EARTH_RADIUS_METERS * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export const supabaseRestaurantRepository: RestaurantRepository = {
@@ -92,41 +78,52 @@ export const supabaseRestaurantRepository: RestaurantRepository = {
   },
 
   async list(filter: RestaurantFilter = {}) {
+    if (filter.nearby) {
+      const { data, error } = await getSupabaseServiceRoleClient().rpc(
+        "nearby_restaurants",
+        {
+          p_latitude: filter.nearby.latitude,
+          p_longitude: filter.nearby.longitude,
+          p_radius_meters: filter.nearby.radiusKm * 1000,
+          p_category: filter.category ?? null,
+          p_place_provider: filter.placeProvider ?? null,
+          p_place_provider_id: filter.placeProviderId ?? null,
+          p_limit: filter.limit ?? 100,
+          p_offset: filter.offset ?? 0
+        }
+      );
+
+      if (error) throwSupabaseError(error);
+      return ((data ?? []) as NearbyRestaurantRow[]).map((row) => ({
+        restaurant: toRestaurant(row),
+        distanceMeters: Number(row.distance_meters)
+      }));
+    }
+
     let query = getSupabaseServiceRoleClient().from("restaurants").select("*");
 
     if (filter.category) query = query.eq("category", filter.category);
     if (filter.placeProvider) query = query.eq("place_provider", filter.placeProvider);
     if (filter.placeProviderId) query = query.eq("place_provider_id", filter.placeProviderId);
 
+    query = query.order("created_at", { ascending: false });
+    if (filter.limit !== undefined) {
+      const offset = filter.offset ?? 0;
+      query = query.range(offset, offset + filter.limit - 1);
+    } else if (filter.offset !== undefined) {
+      query = query.range(filter.offset, filter.offset + 99);
+    }
+
     const { data, error } = await query
-      .order("created_at", { ascending: false })
       .returns<RestaurantRow[]>();
 
     if (error) throwSupabaseError(error);
-
-    const nearbyRows = (data ?? [])
-      .map(toRestaurant)
-      .map((restaurant): RestaurantWithDistance => ({
-        restaurant,
-        distanceMeters: filter.nearby
-          ? calculateDistanceMeters(filter.nearby, restaurant)
-          : undefined
-      }))
-      .filter(
-        (entry) =>
-          entry.distanceMeters === undefined ||
-          entry.distanceMeters <= (filter.nearby?.radiusKm ?? Infinity) * 1000
-      )
-      .sort((left, right) => {
-        if (left.distanceMeters !== undefined && right.distanceMeters !== undefined) {
-          return left.distanceMeters - right.distanceMeters;
-        }
-        return right.restaurant.createdAt.localeCompare(left.restaurant.createdAt);
-      });
-
-    const offset = filter.offset ?? 0;
-    const limit = filter.limit ?? nearbyRows.length;
-    return nearbyRows.slice(offset, offset + limit);
+    const rows = (data ?? []).map((row): RestaurantWithDistance => ({
+      restaurant: toRestaurant(row)
+    }));
+    return filter.limit === undefined && filter.offset !== undefined
+      ? rows.slice(filter.offset)
+      : rows;
   },
 
   async create(input: CreateRestaurantInput) {

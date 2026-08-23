@@ -110,6 +110,31 @@ async function toResponse(
   };
 }
 
+async function toResponses(
+  rows: Array<{ restaurant: Restaurant; distanceMeters?: number }>,
+  userId: string
+): Promise<RestaurantResponse[]> {
+  const [favorites, posts] = await Promise.all([
+    repositories.restaurantFavorites.listByUser(userId),
+    repositories.matching.listPosts({ status: "open" })
+  ]);
+  const favoriteIds = new Set(favorites.map((favorite) => favorite.restaurantId));
+  const partyCounts = new Map<string, number>();
+
+  for (const post of posts) {
+    if (post.restaurantId) {
+      partyCounts.set(post.restaurantId, (partyCounts.get(post.restaurantId) ?? 0) + 1);
+    }
+  }
+
+  return rows.map(({ restaurant, distanceMeters }) => ({
+    ...restaurant,
+    isFavorite: favoriteIds.has(restaurant.id),
+    activePartyCount: partyCounts.get(restaurant.id) ?? 0,
+    distanceMeters
+  }));
+}
+
 export async function createRestaurant(input: CreateRestaurantInput): Promise<Restaurant> {
   const normalized = normalizeCreateInput(input);
   const existing = await repositories.restaurants.findByProviderId(
@@ -145,9 +170,7 @@ export async function listRestaurants(
     offset: normalized.offset
   });
 
-  return Promise.all(
-    rows.map(({ restaurant, distanceMeters }) => toResponse(restaurant, userId, distanceMeters))
-  );
+  return toResponses(rows, userId);
 }
 
 export async function getRestaurant(
@@ -191,9 +214,10 @@ export async function listMyRestaurantFavorites(userId: string): Promise<Restaur
     favorites.map((favorite) => repositories.restaurants.findById(favorite.restaurantId))
   );
 
-  return Promise.all(
+  return toResponses(
     restaurants
       .filter((restaurant): restaurant is Restaurant => restaurant !== null)
-      .map((restaurant) => toResponse(restaurant, userId))
+      .map((restaurant) => ({ restaurant })),
+    userId
   );
 }
