@@ -296,6 +296,16 @@ async function main() {
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
     if (postIds.length > 0) {
+      // Chat persistence uses ON DELETE RESTRICT from rooms to matching posts.
+      // Delete only rooms created from this script's exact post IDs first.
+      const chatCleanup = await service.from("chat_rooms").delete().in("matching_post_id", postIds);
+      if (
+        chatCleanup.error &&
+        chatCleanup.error.code !== "42P01" &&
+        chatCleanup.error.code !== "PGRST205"
+      ) {
+        throw chatCleanup.error;
+      }
       await service.from("matching_posts").delete().in("id", postIds);
     }
     if (restaurantId) {

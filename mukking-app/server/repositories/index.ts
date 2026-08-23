@@ -4,6 +4,7 @@ import { memoryRepositories } from "./memory";
 import { supabaseAdminRepository } from "./supabase/admin.supabase.repository";
 import { supabaseAuthRepository } from "./supabase/auth.supabase.repository";
 import { supabaseBlockRepository } from "./supabase/block.supabase.repository";
+import { supabaseChatRepository } from "./supabase/chat.supabase.repository";
 import { supabaseMatchingRepository } from "./supabase/matching.supabase.repository";
 import { supabaseReportRepository } from "./supabase/report.supabase.repository";
 import { supabaseRestaurantFavoriteRepository } from "./supabase/restaurant-favorite.supabase.repository";
@@ -24,6 +25,9 @@ export const repositories: RepositoryRegistry = {
   blocks: useSupabaseRepositories
     ? supabaseBlockRepository
     : memoryRepositories.blocks,
+  chat: useSupabaseRepositories
+    ? supabaseChatRepository
+    : memoryRepositories.chat,
   matching: useSupabaseRepositories
     ? supabaseMatchingRepository
     : memoryRepositories.matching,

@@ -269,16 +269,35 @@ async function main() {
     if (restaurantId) {
       // Matching is optional in older DBs. Once its migration is applied,
       // remove only this script's restaurant-linked test posts before the FK parent.
-      const matchingCleanup = await service
+      const matchingRows = await service
         .from("matching_posts")
-        .delete()
+        .select("id")
         .eq("restaurant_id", restaurantId);
       if (
-        matchingCleanup.error &&
-        matchingCleanup.error.code !== "42P01" &&
-        matchingCleanup.error.code !== "PGRST205"
+        matchingRows.error &&
+        matchingRows.error.code !== "42P01" &&
+        matchingRows.error.code !== "PGRST205"
       ) {
-        throw matchingCleanup.error;
+        throw matchingRows.error;
+      }
+      const matchingPostIds = (matchingRows.data ?? []).map((post) => post.id);
+      if (matchingPostIds.length > 0) {
+        const chatCleanup = await service
+          .from("chat_rooms")
+          .delete()
+          .in("matching_post_id", matchingPostIds);
+        if (
+          chatCleanup.error &&
+          chatCleanup.error.code !== "42P01" &&
+          chatCleanup.error.code !== "PGRST205"
+        ) {
+          throw chatCleanup.error;
+        }
+        const matchingCleanup = await service
+          .from("matching_posts")
+          .delete()
+          .in("id", matchingPostIds);
+        if (matchingCleanup.error) throw matchingCleanup.error;
       }
       await service.from("restaurant_favorites").delete().eq("restaurant_id", restaurantId);
       await service.from("restaurants").delete().eq("id", restaurantId);
