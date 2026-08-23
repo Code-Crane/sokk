@@ -425,6 +425,10 @@ async function main() {
       if (result.error) cleanupErrors.push("block");
     }
     if (postId) {
+      for (const table of ["pending_evaluations", "manner_ratings"]) {
+        const ratingCleanup = await service.from(table).delete().eq("matching_post_id", postId);
+        if (ratingCleanup.error && ratingCleanup.error.code !== "42P01" && ratingCleanup.error.code !== "PGRST205") cleanupErrors.push(table);
+      }
       const roomResult = await service.from("chat_rooms").delete().eq("matching_post_id", postId);
       if (roomResult.error) cleanupErrors.push("chat");
       const postResult = await service.from("matching_posts").delete().eq("id", postId);

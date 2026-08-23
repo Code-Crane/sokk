@@ -44,6 +44,18 @@ export interface MannerRatingFilter
   source?: MannerRatingSource;
 }
 
+export interface StoredMannerProfile {
+  mannerScore: number;
+  mannerGrade: import("../../../shared/types").MannerGrade;
+}
+
+export interface SubmittedMannerRating {
+  rating: MannerRating;
+  previousScore: number;
+  nextScore: number;
+  nextGrade: import("../../../shared/types").MannerGrade;
+}
+
 export interface RatingRepository {
   listPendingEvaluations(userId: string): Promise<PendingEvaluation[]>;
   countPendingEvaluations(userId: string): Promise<number>;
@@ -61,6 +73,11 @@ export interface RatingRepository {
   ): Promise<PendingEvaluation[]>;
   deletePendingEvaluation(evaluationId: string): Promise<void>;
   createMannerRating(input: CreateMannerRatingInput): Promise<MannerRating>;
+  submitMannerRating(
+    input: CreateMannerRatingInput,
+    pendingEvaluationId: string
+  ): Promise<SubmittedMannerRating>;
+  getMannerProfile(userId: string): Promise<StoredMannerProfile | null>;
   listMannerRatings(filter?: MannerRatingFilter): Promise<MannerRating[]>;
   createAdminMannerAdjustment(
     input: AdminMannerAdjustmentInput

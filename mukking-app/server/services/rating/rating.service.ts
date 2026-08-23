@@ -97,25 +97,29 @@ export async function submitMannerRating(
     throw Object.assign(new Error("Reviewee not found."), { statusCode: 404 });
   }
 
-  const previousScore = reviewee.mannerScore;
+  const storedProfile = await repositories.rating.getMannerProfile(reviewee.id);
+  const previousScore = storedProfile?.mannerScore ?? reviewee.mannerScore;
   const nextScore = calculateNextMannerScore(previousScore, input);
   const nextGrade = getMannerGrade(nextScore);
 
-  await repositories.rating.createMannerRating({
+  const submitted = await repositories.rating.submitMannerRating({
     ...input,
     reviewerId,
     previousScore,
     nextScore,
     delta: calculateMannerScoreDelta(input)
-  });
+  }, pendingEvaluation.id);
 
-  await repositories.users.updateMannerProfile(reviewee.id, nextScore, nextGrade);
-  await repositories.rating.deletePendingEvaluation(pendingEvaluation.id);
+  await repositories.users.updateMannerProfile(
+    reviewee.id,
+    submitted.nextScore,
+    submitted.nextGrade
+  );
 
   return {
-    previousScore,
-    nextScore,
-    nextGrade,
+    previousScore: submitted.previousScore,
+    nextScore: submitted.nextScore,
+    nextGrade: submitted.nextGrade,
     remainingPendingEvaluationCount: await getPendingEvaluationCount(reviewerId)
   };
 }

@@ -16,7 +16,9 @@
     "smoke:matching:supabase": "node scripts/matchingSupabasePersistence.cjs",
     "smoke:matching:security": "node scripts/matchingSupabaseSecurity.cjs",
     "smoke:chat": "node scripts/chatMemorySmoke.cjs",
-    "smoke:chat:supabase": "node scripts/chatSupabasePersistence.cjs"
+    "smoke:chat:supabase": "node scripts/chatSupabasePersistence.cjs",
+    "smoke:rating": "node scripts/ratingMemorySmoke.cjs",
+    "smoke:rating:supabase": "node scripts/ratingSupabasePersistence.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

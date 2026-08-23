@@ -296,6 +296,16 @@ async function main() {
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
     if (postIds.length > 0) {
+      for (const table of ["pending_evaluations", "manner_ratings"]) {
+        const ratingCleanup = await service.from(table).delete().in("matching_post_id", postIds);
+        if (
+          ratingCleanup.error &&
+          ratingCleanup.error.code !== "42P01" &&
+          ratingCleanup.error.code !== "PGRST205"
+        ) {
+          throw ratingCleanup.error;
+        }
+      }
       // Chat persistence uses ON DELETE RESTRICT from rooms to matching posts.
       // Delete only rooms created from this script's exact post IDs first.
       const chatCleanup = await service.from("chat_rooms").delete().in("matching_post_id", postIds);

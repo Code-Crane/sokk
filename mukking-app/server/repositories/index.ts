@@ -6,6 +6,7 @@ import { supabaseAuthRepository } from "./supabase/auth.supabase.repository";
 import { supabaseBlockRepository } from "./supabase/block.supabase.repository";
 import { supabaseChatRepository } from "./supabase/chat.supabase.repository";
 import { supabaseMatchingRepository } from "./supabase/matching.supabase.repository";
+import { supabaseRatingRepository } from "./supabase/rating.supabase.repository";
 import { supabaseReportRepository } from "./supabase/report.supabase.repository";
 import { supabaseRestaurantFavoriteRepository } from "./supabase/restaurant-favorite.supabase.repository";
 import { supabaseRestaurantRepository } from "./supabase/restaurant.supabase.repository";
@@ -31,6 +32,9 @@ export const repositories: RepositoryRegistry = {
   matching: useSupabaseRepositories
     ? supabaseMatchingRepository
     : memoryRepositories.matching,
+  rating: useSupabaseRepositories
+    ? supabaseRatingRepository
+    : memoryRepositories.rating,
   reports: useSupabaseRepositories
     ? supabaseReportRepository
     : memoryRepositories.reports,

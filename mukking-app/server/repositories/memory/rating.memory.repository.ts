@@ -1,5 +1,6 @@
 import type { MannerRating, PendingEvaluation } from "../../../shared/types";
 import { nowIso } from "../../../shared/utils/date";
+import { getMannerGrade } from "../../../shared/utils/rating";
 import { createEntityId } from "../../models/id";
 import { db } from "../../models/inMemoryDb";
 import type {
@@ -118,6 +119,21 @@ export const memoryRatingRepository: RatingRepository = {
 
     db.mannerRatings.set(rating.id, rating);
     return rating;
+  },
+
+  async submitMannerRating(input, pendingEvaluationId) {
+    const rating = await this.createMannerRating(input);
+    await this.deletePendingEvaluation(pendingEvaluationId);
+    return {
+      rating,
+      previousScore: input.previousScore,
+      nextScore: input.nextScore,
+      nextGrade: getMannerGrade(input.nextScore)
+    };
+  },
+
+  async getMannerProfile() {
+    return null;
   },
 
   async listMannerRatings(filter: MannerRatingFilter = {}) {

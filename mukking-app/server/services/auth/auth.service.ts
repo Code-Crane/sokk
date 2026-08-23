@@ -18,9 +18,17 @@ import {
 import { assertNoActiveRestriction } from "../sanction/sanction.service";
 
 async function toPublicUser(user: UserAccount): Promise<PublicUserProfile> {
+  const storedMannerProfile = await repositories.rating.getMannerProfile(user.id);
+  const currentUser = storedMannerProfile
+    ? await repositories.users.updateMannerProfile(
+        user.id,
+        storedMannerProfile.mannerScore,
+        storedMannerProfile.mannerGrade
+      )
+    : user;
   return repositories.users.toPublicProfile(
-    user,
-    await getPendingEvaluationCount(user.id)
+    currentUser,
+    await getPendingEvaluationCount(currentUser.id)
   );
 }
 
