@@ -7,6 +7,7 @@ import type {
   ChatRepository,
   CreateChatMessageInput,
   CreateChatRoomInput,
+  EnsureSystemMessageInput,
   UpsertChatRoomMemberInput
 } from "../interfaces/chat.repository";
 
@@ -23,13 +24,35 @@ export const memoryChatRepository: ChatRepository = {
     return db.chatRooms.get(roomId) ?? null;
   },
 
-  async createRoom(input: CreateChatRoomInput) {
+  async ensureRoom(input: CreateChatRoomInput) {
+    const existing = Array.from(db.chatRooms.values()).find(
+      (room) => room.postId === input.postId && room.status === "active"
+    );
+
+    if (existing) {
+      const participantIds = Array.from(
+        new Set([...existing.participantIds, ...input.participantIds])
+      );
+
+      if (participantIds.length !== existing.participantIds.length) {
+        const updated = {
+          ...existing,
+          participantIds,
+          updatedAt: nowIso()
+        };
+        db.chatRooms.set(existing.id, updated);
+        return updated;
+      }
+
+      return existing;
+    }
+
     const timestamp = nowIso();
     const room: ChatRoom = {
       id: createEntityId("room"),
       postId: input.postId,
       title: input.title,
-      participantIds: input.participantIds,
+      participantIds: Array.from(new Set(input.participantIds)),
       status: input.status ?? "active",
       createdAt: timestamp,
       updatedAt: timestamp
@@ -116,6 +139,12 @@ export const memoryChatRepository: ChatRepository = {
     return filtered.slice(offset, offset + limit);
   },
 
+  async hasSystemMessage(roomId, text) {
+    return (db.chatMessages.get(roomId) ?? []).some(
+      (message) => message.senderId === "system" && message.text === text
+    );
+  },
+
   async createMessage(input: CreateChatMessageInput) {
     const message: ChatMessage = {
       id: createEntityId("msg"),
@@ -129,6 +158,23 @@ export const memoryChatRepository: ChatRepository = {
     messages.push(message);
     db.chatMessages.set(input.roomId, messages);
 
+    return message;
+  },
+
+  async ensureSystemMessage(input: EnsureSystemMessageInput) {
+    const messages = db.chatMessages.get(input.roomId) ?? [];
+    const existing = messages.find((message) => message.id === input.id);
+    if (existing) return existing;
+
+    const message: ChatMessage = {
+      id: input.id,
+      roomId: input.roomId,
+      senderId: "system",
+      text: input.text,
+      createdAt: nowIso()
+    };
+    messages.push(message);
+    db.chatMessages.set(input.roomId, messages);
     return message;
   }
 };

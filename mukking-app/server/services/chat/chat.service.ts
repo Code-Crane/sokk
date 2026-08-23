@@ -8,6 +8,8 @@ import { repositories } from "../../repositories";
 import { assertCanUseChat, assertVerifiedUser } from "../auth/auth.service";
 import { assertNoActiveBlockBetween } from "../block/block.service";
 
+const ROOM_OPENED_SYSTEM_MESSAGE = "매칭이 성사되어 채팅방이 열렸습니다.";
+
 function assertRoomParticipant(room: ChatRoom, userId: string): void {
   if (!room.participantIds.includes(userId)) {
     throw Object.assign(new Error("You are not a participant in this chat room."), {
@@ -16,45 +18,31 @@ function assertRoomParticipant(room: ChatRoom, userId: string): void {
   }
 }
 
-export function createOrUpdateRoomForPost(
-  post: MatchingPost,
-  acceptedUserId: string
-): Promise<ChatRoom> {
-  return createOrUpdateRoomForPostAsync(post, acceptedUserId);
-}
-
-async function createOrUpdateRoomForPostAsync(
-  post: MatchingPost,
-  acceptedUserId: string
-): Promise<ChatRoom> {
-  await assertNoActiveBlockBetween(post.authorId, acceptedUserId, "chat");
-
-  const existingRoom = await repositories.chat.findActiveRoomByPostId(post.id);
-
-  if (existingRoom) {
-    await repositories.chat.upsertRoomMember({
-      roomId: existingRoom.id,
-      userId: acceptedUserId
-    });
-
-    return repositories.chat.touchRoom(existingRoom.id, new Date().toISOString());
-  }
-
-  const room = await repositories.chat.createRoom({
+export async function ensureChatForAcceptedPost(post: MatchingPost): Promise<ChatRoom> {
+  const participantIds = Array.from(new Set([post.authorId, ...post.participantIds]));
+  const room = await repositories.chat.ensureRoom({
     postId: post.id,
     title: post.restaurantName,
-    participantIds: [post.authorId, acceptedUserId],
+    participantIds,
     status: "active"
   });
 
-  await repositories.chat.createMessage({
-    roomId: room.id,
-    senderId: "system",
-    messageType: "system",
-    text: "매칭이 성사되어 채팅방이 열렸습니다."
-  });
+  const hasLegacyOpenedMessage = await repositories.chat.hasSystemMessage(
+    room.id,
+    ROOM_OPENED_SYSTEM_MESSAGE
+  );
 
-  return room;
+  if (!hasLegacyOpenedMessage) {
+    await repositories.chat.ensureSystemMessage({
+      id: `msg_room_opened_${room.id}`,
+      roomId: room.id,
+      text: ROOM_OPENED_SYSTEM_MESSAGE
+    });
+  }
+
+  return (
+    (await repositories.chat.findRoomById(room.id)) ?? room
+  );
 }
 
 export async function listChatRooms(userId: string): Promise<ChatRoom[]> {

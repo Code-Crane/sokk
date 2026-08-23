@@ -29,6 +29,11 @@ export interface CreateChatMessageInput extends SendMessageInput {
   messageType?: ChatMessageType;
 }
 
+export interface EnsureSystemMessageInput extends SendMessageInput {
+  id: string;
+  roomId: string;
+}
+
 export interface ChatMessageFilter extends RepositoryListOptions {
   before?: string;
   after?: string;
@@ -37,7 +42,7 @@ export interface ChatMessageFilter extends RepositoryListOptions {
 export interface ChatRepository {
   findActiveRoomByPostId(postId: string): Promise<ChatRoom | null>;
   findRoomById(roomId: string): Promise<ChatRoom | null>;
-  createRoom(input: CreateChatRoomInput): Promise<ChatRoom>;
+  ensureRoom(input: CreateChatRoomInput): Promise<ChatRoom>;
   updateRoomStatus(roomId: string, status: ChatRoomStatus): Promise<ChatRoom>;
   touchRoom(roomId: string, updatedAt: string): Promise<ChatRoom>;
   listRoomsForUser(userId: string): Promise<ChatRoom[]>;
@@ -48,5 +53,7 @@ export interface ChatRepository {
     roomId: string,
     filter?: ChatMessageFilter
   ): Promise<ChatMessage[]>;
+  hasSystemMessage(roomId: string, text: string): Promise<boolean>;
   createMessage(input: CreateChatMessageInput): Promise<ChatMessage>;
+  ensureSystemMessage(input: EnsureSystemMessageInput): Promise<ChatMessage>;
 }

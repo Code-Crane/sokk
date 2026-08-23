@@ -9,7 +9,7 @@ import { isFutureIso, nowIso } from "../../../shared/utils/date";
 import { repositories } from "../../repositories";
 import { assertCanUseMatching, assertVerifiedUser } from "../auth/auth.service";
 import { assertNoActiveBlockBetween } from "../block/block.service";
-import { createOrUpdateRoomForPost } from "../chat/chat.service";
+import { ensureChatForAcceptedPost } from "../chat/chat.service";
 import { createFavoriteRestaurantPartyNotifications } from "../notification/notification.service";
 import { createPendingEvaluationsForMatch } from "../rating/rating.service";
 
@@ -156,23 +156,51 @@ export async function respondToJoinRequest(
     });
   }
 
-  if (request.status !== "pending") {
+  if (input.decision === "accepted") {
+    if (request.status === "accepted") {
+      return {
+        request,
+        chatRoom: await ensureChatForAcceptedPost(post)
+      };
+    }
+
+    if (request.status !== "pending") {
+      throw Object.assign(new Error("This join request has already been handled."), {
+        statusCode: 409
+      });
+    }
+
+    await assertNoActiveBlockBetween(authorId, request.requesterId, "chat");
+  } else if (request.status !== "pending") {
     throw Object.assign(new Error("This join request has already been handled."), {
       statusCode: 409
     });
-  }
-
-  if (input.decision === "accepted") {
-    await assertNoActiveBlockBetween(authorId, request.requesterId, "chat");
   }
 
   let chatRoom: ChatRoom | undefined;
   let updatedRequest: JoinRequest;
 
   if (input.decision === "accepted") {
-    const result = await repositories.matching.acceptJoinRequest(request.id);
+    let result: { request: JoinRequest; post: MatchingPost };
+
+    try {
+      result = await repositories.matching.acceptJoinRequest(request.id);
+    } catch (error) {
+      const latestRequest = await repositories.matching.findJoinRequestById(request.id);
+
+      if (latestRequest?.status !== "accepted") throw error;
+
+      const latestPost = await repositories.matching.findPostById(latestRequest.postId);
+      if (!latestPost) throw error;
+
+      return {
+        request: latestRequest,
+        chatRoom: await ensureChatForAcceptedPost(latestPost)
+      };
+    }
+
     updatedRequest = result.request;
-    chatRoom = await createOrUpdateRoomForPost(result.post, request.requesterId);
+    chatRoom = await ensureChatForAcceptedPost(result.post);
   } else {
     updatedRequest = await repositories.matching.updateJoinRequestStatus(
       request.id,

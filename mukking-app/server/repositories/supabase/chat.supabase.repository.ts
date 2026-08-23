@@ -8,6 +8,7 @@ import type {
   ChatRepository,
   CreateChatMessageInput,
   CreateChatRoomInput,
+  EnsureSystemMessageInput,
   UpsertChatRoomMemberInput
 } from "../interfaces/chat.repository";
 import { ensureRow, throwSupabaseError } from "./helpers";
@@ -104,7 +105,7 @@ export const supabaseChatRepository: ChatRepository = {
     return hydrateRoom(data);
   },
 
-  async createRoom(input: CreateChatRoomInput) {
+  async ensureRoom(input: CreateChatRoomInput) {
     const { data, error } = await getSupabaseServiceRoleClient().rpc(
       "create_or_reuse_chat_room",
       {
@@ -221,6 +222,19 @@ export const supabaseChatRepository: ChatRepository = {
     return (data ?? []).map(toMessage);
   },
 
+  async hasSystemMessage(roomId, text) {
+    const { data, error } = await getSupabaseServiceRoleClient()
+      .from("chat_messages")
+      .select("id")
+      .eq("room_id", roomId)
+      .eq("message_type", "system")
+      .eq("text", text)
+      .limit(1)
+      .maybeSingle();
+    if (error) throwSupabaseError(error);
+    return Boolean(data);
+  },
+
   async createMessage(input: CreateChatMessageInput) {
     const messageType = input.messageType ?? (input.senderId === "system" ? "system" : "user");
     const { data, error } = await getSupabaseServiceRoleClient()
@@ -237,5 +251,29 @@ export const supabaseChatRepository: ChatRepository = {
       .single<ChatMessageRow>();
     if (error) throwSupabaseError(error);
     return toMessage(ensureRow(data, "Chat message was not created."));
+  },
+
+  async ensureSystemMessage(input: EnsureSystemMessageInput) {
+    const client = getSupabaseServiceRoleClient();
+    const { error: upsertError } = await client.from("chat_messages").upsert(
+      {
+        id: input.id,
+        room_id: input.roomId,
+        sender_id: null,
+        message_type: "system",
+        text: input.text,
+        created_at: nowIso()
+      },
+      { onConflict: "id", ignoreDuplicates: true }
+    );
+    if (upsertError) throwSupabaseError(upsertError);
+
+    const { data, error } = await client
+      .from("chat_messages")
+      .select("*")
+      .eq("id", input.id)
+      .single<ChatMessageRow>();
+    if (error) throwSupabaseError(error);
+    return toMessage(ensureRow(data, "System message was not created."));
   }
 };
