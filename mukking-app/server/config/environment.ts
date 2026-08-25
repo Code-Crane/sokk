@@ -59,6 +59,12 @@ export const environment = {
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  pushProvider: process.env.PUSH_PROVIDER ?? "noop",
+  firebaseUseApplicationDefaultCredentials:
+    process.env.FIREBASE_USE_ADC === "true",
+  firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? "",
+  firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL ?? "",
+  firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY ?? "",
   adminUidWhitelist: readCsv("ADMIN_UID_WHITELIST"),
   adminEmailWhitelist: readCsv("ADMIN_EMAIL_WHITELIST"),
   requireAdminMfa: process.env.ADMIN_REQUIRE_MFA !== "false",
@@ -91,6 +97,10 @@ export const environment = {
     restaurantWrite: {
       windowMs: readNumber("RATE_LIMIT_RESTAURANT_WRITE_WINDOW_MS", defaultRateLimitWindowMs),
       max: readNumber("RATE_LIMIT_RESTAURANT_WRITE_MAX", 30)
+    },
+    pushDevice: {
+      windowMs: readNumber("RATE_LIMIT_PUSH_DEVICE_WINDOW_MS", defaultRateLimitWindowMs),
+      max: readNumber("RATE_LIMIT_PUSH_DEVICE_MAX", 30)
     },
     adminAuth: {
       windowMs: readNumber("RATE_LIMIT_ADMIN_AUTH_WINDOW_MS", defaultRateLimitWindowMs),

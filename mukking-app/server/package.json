@@ -21,6 +21,8 @@
     "reconcile:matching-chats": "node scripts/reconcileMatchingChats.cjs",
     "smoke:notifications": "node scripts/notificationMemorySmoke.cjs",
     "smoke:notifications:supabase": "node scripts/notificationSupabasePersistence.cjs",
+    "smoke:push": "node scripts/pushMemorySmoke.cjs",
+    "smoke:push:supabase": "node scripts/pushSupabasePersistence.cjs",
     "smoke:chat": "node scripts/chatMemorySmoke.cjs",
     "smoke:chat:supabase": "node scripts/chatSupabasePersistence.cjs",
     "smoke:rating": "node scripts/ratingMemorySmoke.cjs",
@@ -33,6 +35,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "firebase-admin": "^14.3.0",
     "helmet": "^8.3.0"
   },
   "devDependencies": {

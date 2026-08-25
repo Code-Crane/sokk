@@ -6,6 +6,7 @@ import type {
 } from "../../../shared/types";
 import { nowIso } from "../../../shared/utils/date";
 import { repositories } from "../../repositories";
+import { dispatchNotificationsBestEffort } from "../push/push-dispatch.service";
 
 function invalid(message: string): never {
   throw Object.assign(new Error(message), { statusCode: 400 });
@@ -45,7 +46,7 @@ export async function createFavoriteRestaurantPartyNotifications(
     (userId) => userId !== post.authorId
   );
 
-  return repositories.notifications.createMany(
+  const notifications = await repositories.notifications.createMany(
     recipientIds.map((userId) => ({
       userId,
       type: "favorite_restaurant_party_created" as const,
@@ -56,6 +57,9 @@ export async function createFavoriteRestaurantPartyNotifications(
       actorUserId: post.authorId
     }))
   );
+
+  await dispatchNotificationsBestEffort(notifications);
+  return notifications;
 }
 
 export async function listNotifications(

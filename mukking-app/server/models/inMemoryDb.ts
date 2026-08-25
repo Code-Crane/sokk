@@ -6,6 +6,7 @@ import type {
   MannerRating,
   PendingEvaluation,
   UserNotification,
+  UserPushDevice,
   UserAccount,
   UserReport,
   VerificationClaim
@@ -21,6 +22,7 @@ export const db = {
   pendingEvaluations: new Map<string, PendingEvaluation>(),
   mannerRatings: new Map<string, MannerRating>(),
   notifications: new Map<string, UserNotification>(),
+  pushDevices: new Map<string, UserPushDevice>(),
   reports: new Map<string, UserReport>(),
   restaurants: new Map<string, import("../../shared/types").Restaurant>(),
   restaurantFavorites: new Map<

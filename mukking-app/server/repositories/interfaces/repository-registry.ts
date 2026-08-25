@@ -5,6 +5,7 @@ import type { ChatRepository } from "./chat.repository";
 import type { LocationRepository } from "./location.repository";
 import type { MatchingRepository } from "./matching.repository";
 import type { NotificationRepository } from "./notification.repository";
+import type { PushDeviceRepository } from "./push-device.repository";
 import type { RatingRepository } from "./rating.repository";
 import type { ReportRepository } from "./report.repository";
 import type { RestaurantFavoriteRepository } from "./restaurant-favorite.repository";
@@ -21,6 +22,7 @@ export interface RepositoryRegistry {
   location: LocationRepository;
   matching: MatchingRepository;
   notifications: NotificationRepository;
+  pushDevices: PushDeviceRepository;
   rating: RatingRepository;
   reports: ReportRepository;
   restaurantFavorites: RestaurantFavoriteRepository;
