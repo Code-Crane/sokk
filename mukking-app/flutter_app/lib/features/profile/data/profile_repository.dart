@@ -8,6 +8,7 @@ import 'profile_api.dart';
 
 abstract class ProfileRepository {
   Future<ProfileSummary> currentProfile();
+  Future<VerificationSnapshot> completeMockVerification();
 }
 
 final profileApiProvider = Provider<ProfileApi>((ref) {
@@ -49,6 +50,16 @@ class MockProfileRepository implements ProfileRepository {
       pendingEvaluationCount: 0,
     );
   }
+
+  @override
+  Future<VerificationSnapshot> completeMockVerification() async {
+    return const VerificationSnapshot(
+      status: VerificationStatus.verified,
+      label: '인증완료',
+      canUseMatching: true,
+      canUseChat: true,
+    );
+  }
 }
 
 class ApiProfileRepository implements ProfileRepository {
@@ -67,5 +78,10 @@ class ApiProfileRepository implements ProfileRepository {
       verification: verification,
       pendingEvaluationCount: pendingCount,
     );
+  }
+
+  @override
+  Future<VerificationSnapshot> completeMockVerification() {
+    return _api.completeMockVerification();
   }
 }

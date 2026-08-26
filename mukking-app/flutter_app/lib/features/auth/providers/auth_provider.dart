@@ -79,7 +79,14 @@ class AuthController extends StateNotifier<MukkingAuthState> {
   }
 
   Future<void> logout() async {
-    await _repository.logout();
-    state = const MukkingAuthState.unauthenticated();
+    state = const MukkingAuthState.loading();
+    try {
+      await _repository.logout();
+    } catch (_) {
+      // Supabase may fail to notify the remote session while the local session
+      // has already been cleared. Logout must still return to the login gate.
+    } finally {
+      state = const MukkingAuthState.unauthenticated();
+    }
   }
 }

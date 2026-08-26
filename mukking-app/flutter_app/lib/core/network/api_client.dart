@@ -7,8 +7,13 @@ class ApiClient {
 
   final Dio _dio;
 
-  Future<List<dynamic>> getList(String path) async {
-    final response = await _request(() => _dio.get<Object?>(path));
+  Future<List<dynamic>> getList(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    final response = await _request(
+      () => _dio.get<Object?>(path, queryParameters: queryParameters),
+    );
     final data = response.data;
 
     if (data is List) {
@@ -21,8 +26,13 @@ class ApiClient {
     );
   }
 
-  Future<Map<String, dynamic>> getMap(String path) async {
-    final response = await _request(() => _dio.get<Object?>(path));
+  Future<Map<String, dynamic>> getMap(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    final response = await _request(
+      () => _dio.get<Object?>(path, queryParameters: queryParameters),
+    );
     return _asMap(response.data);
   }
 
@@ -31,6 +41,20 @@ class ApiClient {
     Object? data,
   }) async {
     final response = await _request(() => _dio.post<Object?>(path, data: data));
+    return _asMap(response.data);
+  }
+
+  Future<Map<String, dynamic>> patchMap(
+    String path, {
+    Object? data,
+  }) async {
+    final response =
+        await _request(() => _dio.patch<Object?>(path, data: data));
+    return _asMap(response.data);
+  }
+
+  Future<Map<String, dynamic>> deleteMap(String path) async {
+    final response = await _request(() => _dio.delete<Object?>(path));
     return _asMap(response.data);
   }
 

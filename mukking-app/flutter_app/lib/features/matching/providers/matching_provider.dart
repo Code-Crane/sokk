@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_error.dart';
+import '../../chat/providers/chat_provider.dart';
 import '../../discovery/domain/restaurant.dart';
+import '../../discovery/providers/discovery_provider.dart';
 import '../data/matching_repository.dart';
 import '../domain/matching_party.dart';
 
@@ -54,11 +56,97 @@ final partiesByRestaurantProvider =
       .toList();
 });
 
+final partyJoinRequestsProvider =
+    FutureProvider.family<List<PartyJoinRequest>, String>((ref, partyId) {
+  return ref.watch(matchingRepositoryProvider).listJoinRequests(partyId);
+});
+
+final respondJoinRequestControllerProvider = StateNotifierProvider.family<
+    RespondJoinRequestController,
+    AsyncValue<RespondJoinRequestResult?>,
+    String>((ref, partyId) {
+  return RespondJoinRequestController(
+    ref.watch(matchingRepositoryProvider),
+    onResponded: () {
+      ref.invalidate(partyJoinRequestsProvider(partyId));
+      ref.invalidate(matchingFeedProvider);
+      ref.invalidate(chatRoomsProvider);
+    },
+  );
+});
+
+class RespondJoinRequestController
+    extends StateNotifier<AsyncValue<RespondJoinRequestResult?>> {
+  RespondJoinRequestController(
+    this._repository, {
+    required void Function() onResponded,
+  })  : _onResponded = onResponded,
+        super(const AsyncValue.data(null));
+
+  final MatchingRepository _repository;
+  final void Function() _onResponded;
+
+  Future<RespondJoinRequestResult?> respond({
+    required String requestId,
+    required String decision,
+  }) async {
+    state = const AsyncValue.loading();
+    try {
+      final result = await _repository.respondJoinRequest(
+        requestId: requestId,
+        decision: decision,
+      );
+      _onResponded();
+      state = AsyncValue.data(result);
+      return result;
+    } catch (error, stackTrace) {
+      state = AsyncValue.error(error, stackTrace);
+      return null;
+    }
+  }
+}
+
 final joinPartyControllerProvider =
     StateNotifierProvider<JoinPartyController, AsyncValue<JoinRequestResult?>>(
         (ref) {
   return JoinPartyController(ref.watch(matchingRepositoryProvider));
 });
+
+final createPartyControllerProvider =
+    StateNotifierProvider<CreatePartyController, AsyncValue<MatchingParty?>>(
+        (ref) {
+  return CreatePartyController(
+    ref.watch(matchingRepositoryProvider),
+    onCreated: () {
+      ref.invalidate(matchingFeedProvider);
+      ref.invalidate(restaurantFeedProvider);
+    },
+  );
+});
+
+class CreatePartyController extends StateNotifier<AsyncValue<MatchingParty?>> {
+  CreatePartyController(
+    this._repository, {
+    required void Function() onCreated,
+  })  : _onCreated = onCreated,
+        super(const AsyncValue.data(null));
+
+  final MatchingRepository _repository;
+  final void Function() _onCreated;
+
+  Future<MatchingParty?> create(CreatePartyInput input) async {
+    state = const AsyncValue.loading();
+    try {
+      final party = await _repository.createParty(input);
+      _onCreated();
+      state = AsyncValue.data(party);
+      return party;
+    } catch (error, stackTrace) {
+      state = AsyncValue.error(error, stackTrace);
+      return null;
+    }
+  }
+}
 
 class JoinPartyController
     extends StateNotifier<AsyncValue<JoinRequestResult?>> {

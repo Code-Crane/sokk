@@ -89,6 +89,11 @@ class SupabaseAuthRepository implements AuthRepository {
     try {
       return MukkingAuthState.authenticated(user: await _authApi.me());
     } on ApiError catch (error) {
+      if (error.kind == ApiErrorKind.unauthorized) {
+        return const MukkingAuthState.unauthenticated(
+          message: '백엔드가 현재 Supabase 세션을 인증하지 못했어요.',
+        );
+      }
       return MukkingAuthState.authenticated(
         user: _fallbackUserFromSession(session),
         message: error.userMessage,
@@ -112,6 +117,11 @@ class SupabaseAuthRepository implements AuthRepository {
       try {
         return MukkingAuthState.authenticated(user: await _authApi.me());
       } on ApiError catch (error) {
+        if (error.kind == ApiErrorKind.unauthorized) {
+          return const MukkingAuthState.unauthenticated(
+            message: '백엔드가 현재 Supabase 세션을 인증하지 못했어요.',
+          );
+        }
         return MukkingAuthState.authenticated(
           user: _fallbackUserFromSession(session),
           message: error.userMessage,

@@ -21,6 +21,7 @@ enum MatchingPartyStatus {
 class MatchingParty {
   const MatchingParty({
     required this.id,
+    required this.hostUserId,
     required this.restaurantId,
     required this.title,
     required this.scheduledAt,
@@ -37,6 +38,7 @@ class MatchingParty {
   });
 
   final String id;
+  final String hostUserId;
   final String restaurantId;
   final String title;
   final DateTime scheduledAt;

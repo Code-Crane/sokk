@@ -13,6 +13,7 @@ class MockPartyRepository {
     return [
       MatchingParty(
         id: 'party-ramen-001',
+        hostUserId: 'mock-host-001',
         restaurantId: 'restaurant-001',
         title: '퇴근 후 라멘 보스전',
         scheduledAt: DateTime(2026, 8, 22, 19, 30),
@@ -29,6 +30,7 @@ class MockPartyRepository {
       ),
       MatchingParty(
         id: 'party-kbbq-002',
+        hostUserId: 'mock-host-002',
         restaurantId: 'restaurant-002',
         title: '고기 굽기 듀오 매칭',
         scheduledAt: DateTime(2026, 8, 23, 18),
@@ -46,6 +48,7 @@ class MockPartyRepository {
       ),
       MatchingParty(
         id: 'party-dessert-003',
+        hostUserId: 'mock-host-003',
         restaurantId: 'restaurant-003',
         title: '디저트 지도 밝히기',
         scheduledAt: DateTime(2026, 8, 24, 15, 10),
@@ -62,6 +65,7 @@ class MockPartyRepository {
       ),
       MatchingParty(
         id: 'party-ramen-004',
+        hostUserId: 'mock-host-004',
         restaurantId: 'restaurant-001',
         title: '혼밥 탈출 라멘 2인팟',
         scheduledAt: DateTime(2026, 8, 22, 20, 10),

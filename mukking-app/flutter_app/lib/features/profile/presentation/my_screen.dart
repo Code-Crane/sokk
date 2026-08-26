@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/network/api_error.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
 import '../../../widgets/xp_progress_bar.dart';
+import '../../auth/domain/auth_user.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../auth/presentation/auth_placeholder_screen.dart';
 import '../../discovery/providers/discovery_provider.dart';
 import '../../settings/presentation/theme_selector.dart';
 import '../providers/profile_provider.dart';
+import '../providers/verification_action_provider.dart';
 
 class MyScreen extends ConsumerWidget {
   const MyScreen({super.key});
@@ -16,9 +20,25 @@ class MyScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
+    final auth = ref.watch(authControllerProvider);
+    final config = ref.watch(appConfigProvider);
+    final verificationAction = ref.watch(verificationActionProvider);
+
+    if (!auth.isAuthenticated) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+        children: [
+          Text('MY', style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: 16),
+          const AuthPlaceholderScreen(),
+          const SizedBox(height: 16),
+          const ThemeSelector(),
+        ],
+      );
+    }
+
     final favoriteRestaurants = ref.watch(favoriteRestaurantsProvider);
     final profile = ref.watch(profileSummaryProvider);
-    final auth = ref.watch(authControllerProvider);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -77,6 +97,77 @@ class MyScreen extends ConsumerWidget {
           ),
           error: (error, _) => _ProfileErrorCard(error: error),
         ),
+        if (config.enableMockVerification) ...[
+          profile.when(
+            data: (summary) {
+              if (summary.verification?.status == VerificationStatus.verified) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: MukkingCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.verified_user_outlined,
+                              color: tokens.warning),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '개발용 본인 인증',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '현재 서버의 Mock 인증으로 채팅과 매칭을 테스트합니다. 실제 개인정보는 입력하지 않습니다.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      if (verificationAction.hasError) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          verificationAction.error is ApiError
+                              ? (verificationAction.error as ApiError)
+                                  .userMessage
+                              : '인증 처리에 실패했어요.',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: tokens.danger,
+                                  ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          key: const Key('development_verification_button'),
+                          onPressed: verificationAction.isLoading
+                              ? null
+                              : () => _completeDevelopmentVerification(
+                                    context,
+                                    ref,
+                                  ),
+                          icon: const Icon(Icons.science_outlined),
+                          label: Text(
+                            verificationAction.isLoading
+                                ? '인증 처리 중...'
+                                : '테스트 인증 완료하기',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+        ],
         const SizedBox(height: 16),
         profile.when(
           data: (summary) => MukkingCard(
@@ -164,11 +255,66 @@ class MyScreen extends ConsumerWidget {
                 '알림, 차단 목록, 개인정보 설정은 다음 단계에서 연결합니다.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const Key('logout_button'),
+                  onPressed: auth.isLoading
+                      ? null
+                      : () => _confirmLogout(context, ref),
+                  icon: const Icon(Icons.logout_rounded),
+                  label: const Text('로그아웃'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: tokens.danger,
+                    side: BorderSide(color: tokens.danger),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+    final shouldLogout = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('로그아웃할까요?'),
+        content: const Text('다시 이용하려면 이메일과 비밀번호로 로그인해야 해요.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('로그아웃'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldLogout == true) {
+      await ref.read(authControllerProvider.notifier).logout();
+    }
+  }
+
+  Future<void> _completeDevelopmentVerification(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final completed = await ref
+        .read(verificationActionProvider.notifier)
+        .completeDevelopmentVerification();
+
+    if (completed && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('테스트 인증이 완료됐어요.')),
+      );
+    }
   }
 }
 

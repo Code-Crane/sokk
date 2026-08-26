@@ -15,8 +15,8 @@ import '../../discovery/providers/discovery_provider.dart';
 import '../../home/providers/home_provider.dart';
 import '../../matching/domain/matching_party.dart';
 import '../../matching/providers/matching_provider.dart';
-import '../../notifications/presentation/mock_notification_card.dart';
-import '../../notifications/providers/mock_notifications_provider.dart';
+import '../../notifications/presentation/notification_card.dart';
+import '../../notifications/providers/notification_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -28,7 +28,9 @@ class HomeScreen extends ConsumerWidget {
     final popularParties = ref.watch(popularPartiesProvider);
     final favoriteParties = ref.watch(favoriteRestaurantPartiesProvider);
     final urgentParties = ref.watch(urgentPartiesProvider);
-    final notifications = ref.watch(mockNotificationsProvider);
+    final notifications = ref.watch(notificationsProvider);
+    final unreadCount =
+        ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -54,17 +56,44 @@ class HomeScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                color: tokens.accent,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                Icons.restaurant_menu_rounded,
-                color: tokens.textPrimary,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: tokens.accent,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    Icons.notifications_rounded,
+                    color: tokens.textPrimary,
+                  ),
+                ),
+                if (unreadCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tokens.danger,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        unreadCount > 99 ? '99+' : '$unreadCount',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: tokens.surface,
+                              fontWeight: FontWeight.w900,
+                            ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
@@ -107,11 +136,17 @@ class HomeScreen extends ConsumerWidget {
               return const MissionCard();
             }
 
-            return MockNotificationCard(
+            return NotificationCard(
               notification: items.first,
-              onTap: () => context.push(
-                AppRoutes.partyDetailPath(items.first.partyId),
-              ),
+              onTap: () {
+                ref
+                    .read(markNotificationReadProvider.notifier)
+                    .markRead(items.first.id);
+                final partyId = items.first.matchingPostId;
+                if (partyId != null) {
+                  context.push(AppRoutes.partyDetailPath(partyId));
+                }
+              },
             );
           },
           loading: () => const MissionCard(),

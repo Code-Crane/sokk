@@ -79,6 +79,24 @@ flutter run \
 - `MUKKING_DATA_PROVIDER=mock`: 로컬 mock data로 UI 확인
 - `MUKKING_DATA_PROVIDER=api`: 기존 Node/Express `/api` endpoint 호출
 
+주의: 이 앱은 `.env` 파일을 자동으로 읽지 않습니다. `flutter run`만 실행하면
+`MUKKING_DATA_PROVIDER` 기본값인 `mock`으로 동작합니다. 로컬 `.env`를 사용할 때는
+값을 출력하거나 커밋하지 말고 다음처럼 명시적으로 전달하세요.
+
+```bash
+flutter run -d chrome --dart-define-from-file=.env
+```
+
+현재 backend 개발 기본 CORS 허용 목록에는 `http://localhost:8081`이 포함되어
+있습니다. Web API 검증에서는 랜덤 포트 대신 다음 고정 포트를 사용하세요.
+
+```bash
+flutter run -d chrome --web-port=8081 --dart-define-from-file=.env
+```
+
+`8080`을 사용하려면 backend 실행 환경의 CORS 허용 origin에도
+`http://localhost:8080`이 포함되어야 합니다.
+
 API 모드 예시:
 
 ```bash

@@ -4,7 +4,7 @@ class Restaurant {
     required this.name,
     required this.category,
     required this.address,
-    required this.distanceKm,
+    required this.distanceMeters,
     required this.imageUrl,
     required this.isFavorite,
     required this.activePartyCount,
@@ -17,7 +17,7 @@ class Restaurant {
   final String name;
   final String category;
   final String address;
-  final double distanceKm;
+  final int? distanceMeters;
   final String imageUrl;
   final bool isFavorite;
   final int activePartyCount;
@@ -25,14 +25,20 @@ class Restaurant {
   final double markerDx;
   final double markerDy;
 
-  String get distanceLabel => '${distanceKm.toStringAsFixed(1)}km';
+  String get distanceLabel {
+    final meters = distanceMeters;
+    if (meters == null) return '거리 정보 없음';
+    if (meters < 1000) return '${meters}m';
+    return '${(meters / 1000).toStringAsFixed(1)}km';
+  }
 
   Restaurant copyWith({
     String? id,
     String? name,
     String? category,
     String? address,
-    double? distanceKm,
+    int? distanceMeters,
+    bool clearDistance = false,
     String? imageUrl,
     bool? isFavorite,
     int? activePartyCount,
@@ -45,7 +51,8 @@ class Restaurant {
       name: name ?? this.name,
       category: category ?? this.category,
       address: address ?? this.address,
-      distanceKm: distanceKm ?? this.distanceKm,
+      distanceMeters:
+          clearDistance ? null : distanceMeters ?? this.distanceMeters,
       imageUrl: imageUrl ?? this.imageUrl,
       isFavorite: isFavorite ?? this.isFavorite,
       activePartyCount: activePartyCount ?? this.activePartyCount,

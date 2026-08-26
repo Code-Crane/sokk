@@ -85,8 +85,8 @@ class RestaurantBottomSheet extends ConsumerWidget {
                     ),
                     const SizedBox(height: 6),
                     partiesAsync.when(
-                      data: (items) => Text(
-                        '현재 모집 중 파티 ${items.length}개',
+                      data: (_) => Text(
+                        '현재 모집 중 파티 ${restaurant.activePartyCount}개',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: tokens.primary,
                               fontWeight: FontWeight.w800,
@@ -119,10 +119,17 @@ class RestaurantBottomSheet extends ConsumerWidget {
                     : Icons.favorite_border_rounded,
                 label: restaurant.isFavorite ? '찜 취소' : '가고 싶어요',
                 color: restaurant.isFavorite ? tokens.favorite : tokens.primary,
-                onTap: () {
-                  ref
-                      .read(favoriteRestaurantIdsProvider.notifier)
-                      .toggle(restaurant.id);
+                onTap: () async {
+                  try {
+                    await ref
+                        .read(favoriteOverridesProvider.notifier)
+                        .toggle(restaurant);
+                  } catch (_) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('찜 상태를 변경하지 못했어요.')),
+                    );
+                  }
                 },
               ),
               _ActionChipButton(
@@ -150,7 +157,7 @@ class RestaurantBottomSheet extends ConsumerWidget {
           const SizedBox(height: 12),
           Text(
             restaurant.isFavorite
-                ? '찜한 식당입니다. 새 파티 mock 알림과 홈 섹션에 반영됩니다.'
+                ? '찜한 식당입니다. 새 파티 알림과 홈 섹션에 반영됩니다.'
                 : '가고 싶어요를 누르면 이 식당의 파티 흐름을 홈에서 이어볼 수 있어요.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),

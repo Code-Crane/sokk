@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/config/app_config.dart';
 import '../core/router/app_routes.dart';
+import '../features/auth/presentation/auth_placeholder_screen.dart';
+import '../features/auth/providers/auth_provider.dart';
 
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerWidget {
   const AppShell({
     required this.child,
     super.key,
@@ -12,8 +16,27 @@ class AppShell extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final location = GoRouterState.of(context).uri.path;
+    final requiresAuth = ref.watch(appConfigProvider).usesApiData;
+    final auth = ref.watch(authControllerProvider);
+
+    if (requiresAuth && auth.isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (requiresAuth && !auth.isAuthenticated) {
+      return const Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.all(20),
+            child: AuthPlaceholderScreen(),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       body: SafeArea(child: child),

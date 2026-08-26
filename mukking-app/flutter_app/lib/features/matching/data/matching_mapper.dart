@@ -12,60 +12,61 @@ class MatchingPostMapper {
 
     for (var index = 0; index < posts.length; index += 1) {
       final post = posts[index];
-      final restaurantId = _restaurantIdFor(post);
-      final scheduledAt = DateTime.tryParse(post.scheduledAt)?.toLocal() ??
-          DateTime.now().add(const Duration(days: 1));
-      final currentMembers = post.participantIds.length + 1;
-      final status = _statusFor(
-        backendStatus: post.status,
-        currentMembers: currentMembers,
-        maxMembers: post.maxParticipants,
-        scheduledAt: scheduledAt,
-      );
-
-      parties.add(
-        MatchingParty(
-          id: post.id,
-          restaurantId: restaurantId,
-          title: post.intro.isEmpty ? '${post.restaurantName} 파티' : post.intro,
-          scheduledAt: scheduledAt,
-          currentMembers: currentMembers,
-          maxMembers: post.maxParticipants,
-          distanceKm: 0,
-          rewardXp: _rewardXpFor(post.maxParticipants, currentMembers),
-          rewardPoints: _rewardPointsFor(post.maxParticipants, currentMembers),
-          status: status,
-          hostName: '파티장',
-          memberNames: [
-            '파티장',
-            for (var memberIndex = 0;
-                memberIndex < post.participantIds.length;
-                memberIndex += 1)
-              '참여자 ${memberIndex + 1}',
-          ],
-          tags: ['실제API', post.status],
-          description: post.intro,
-        ),
-      );
-
-      restaurants.add(
-        Restaurant(
-          id: restaurantId,
-          name: post.restaurantName,
-          category: '맛집',
-          address: post.address,
-          distanceKm: 0,
-          imageUrl: '',
-          imageLabel: post.restaurantName,
-          isFavorite: false,
-          activePartyCount: post.status == 'open' ? 1 : 0,
-          markerDx: 0.18 + (index % 3) * 0.26,
-          markerDy: 0.2 + (index % 4) * 0.16,
-        ),
-      );
+      parties.add(toParty(post));
+      restaurants.add(toRestaurant(post, index: index));
     }
 
     return MatchingFeed(parties: parties, restaurants: restaurants);
+  }
+
+  MatchingParty toParty(MatchingPostDto post) {
+    final scheduledAt = DateTime.tryParse(post.scheduledAt)?.toLocal() ??
+        DateTime.now().add(const Duration(days: 1));
+    final currentMembers = post.participantIds.length + 1;
+    final status = _statusFor(
+      backendStatus: post.status,
+      currentMembers: currentMembers,
+      maxMembers: post.maxParticipants,
+      scheduledAt: scheduledAt,
+    );
+
+    return MatchingParty(
+      id: post.id,
+      hostUserId: post.authorId,
+      restaurantId: _restaurantIdFor(post),
+      title: post.intro.isEmpty ? '${post.restaurantName} 파티' : post.intro,
+      scheduledAt: scheduledAt,
+      currentMembers: currentMembers,
+      maxMembers: post.maxParticipants,
+      distanceKm: 0,
+      rewardXp: _rewardXpFor(post.maxParticipants, currentMembers),
+      rewardPoints: _rewardPointsFor(post.maxParticipants, currentMembers),
+      status: status,
+      hostName: '파티장',
+      memberNames: [
+        '파티장',
+        for (var index = 0; index < post.participantIds.length; index += 1)
+          '참여자 ${index + 1}',
+      ],
+      tags: ['실제API', post.status],
+      description: post.intro,
+    );
+  }
+
+  Restaurant toRestaurant(MatchingPostDto post, {int index = 0}) {
+    return Restaurant(
+      id: _restaurantIdFor(post),
+      name: post.restaurantName,
+      category: '맛집',
+      address: post.address,
+      distanceMeters: null,
+      imageUrl: '',
+      imageLabel: post.restaurantName,
+      isFavorite: false,
+      activePartyCount: post.status == 'open' ? 1 : 0,
+      markerDx: 0.18 + (index % 3) * 0.26,
+      markerDy: 0.2 + (index % 4) * 0.16,
+    );
   }
 
   MatchingPartyStatus _statusFor({
@@ -99,6 +100,6 @@ class MatchingPostMapper {
   }
 
   String _restaurantIdFor(MatchingPostDto post) {
-    return 'api-restaurant-${post.id}';
+    return post.restaurantId ?? 'legacy-restaurant-${post.id}';
   }
 }

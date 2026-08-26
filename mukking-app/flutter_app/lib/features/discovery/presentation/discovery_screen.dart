@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/network/api_error.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
 import '../../matching/domain/matching_party.dart';
@@ -21,6 +22,7 @@ class DiscoveryScreen extends ConsumerWidget {
     final restaurants = ref.watch(filteredRestaurantsProvider);
     final selectedRestaurant = ref.watch(selectedRestaurantProvider);
     final parties = ref.watch(matchingPartiesProvider).valueOrNull ?? const [];
+    final restaurantFeed = ref.watch(restaurantFeedProvider);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -76,6 +78,23 @@ class DiscoveryScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
+        restaurantFeed.when(
+          data: (items) => _RestaurantFeedStatus(
+            message: '주변 맛집 ${items.length}곳을 불러왔어요.',
+            icon: Icons.restaurant_rounded,
+          ),
+          loading: () => const _RestaurantFeedStatus(
+            message: '주변 맛집을 불러오는 중이에요.',
+            icon: Icons.sync_rounded,
+          ),
+          error: (error, _) => _RestaurantFeedStatus(
+            message:
+                error is ApiError ? error.userMessage : '맛집 목록을 불러오지 못했어요.',
+            icon: Icons.error_outline_rounded,
+            onRetry: () => ref.invalidate(restaurantFeedProvider),
+          ),
+        ),
+        const SizedBox(height: 12),
         _MapPlaceholder(
           restaurants: restaurants,
           parties: parties,
@@ -97,6 +116,34 @@ class DiscoveryScreen extends ConsumerWidget {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
+      ],
+    );
+  }
+}
+
+class _RestaurantFeedStatus extends StatelessWidget {
+  const _RestaurantFeedStatus({
+    required this.message,
+    required this.icon,
+    this.onRetry,
+  });
+
+  final String message;
+  final IconData icon;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: tokens.primary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
+        ),
+        if (onRetry != null)
+          TextButton(onPressed: onRetry, child: const Text('다시 시도')),
       ],
     );
   }

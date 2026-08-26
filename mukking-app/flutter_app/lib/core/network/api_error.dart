@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 enum ApiErrorKind {
   badRequest,
@@ -40,7 +41,9 @@ class ApiError implements Exception {
         kind: ApiErrorKind.network,
         statusCode: statusCode,
         serverMessage: serverMessage,
-        userMessage: '서버에 연결할 수 없어요. 서버 실행 상태와 네트워크를 확인해주세요.',
+        userMessage: kIsWeb
+            ? '브라우저에서 API에 연결할 수 없어요. 서버 CORS 허용 주소를 확인해주세요.'
+            : '서버에 연결할 수 없어요. 서버 실행 상태와 네트워크를 확인해주세요.',
       );
     }
 

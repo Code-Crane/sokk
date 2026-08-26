@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum AppDataSource {
@@ -18,6 +19,7 @@ class AppConfig {
     required this.supabaseUrl,
     required this.supabaseAnonKey,
     required this.dataSource,
+    required this.enableMockVerification,
   });
 
   factory AppConfig.fromEnvironment() {
@@ -39,6 +41,10 @@ class AppConfig {
       supabaseUrl: const String.fromEnvironment('MUKKING_SUPABASE_URL'),
       supabaseAnonKey:
           const String.fromEnvironment('MUKKING_SUPABASE_ANON_KEY'),
+      enableMockVerification: const bool.fromEnvironment(
+        'MUKKING_ENABLE_MOCK_VERIFICATION',
+        defaultValue: kDebugMode,
+      ),
     );
   }
 
@@ -47,12 +53,14 @@ class AppConfig {
     String supabaseUrl = '',
     String supabaseAnonKey = '',
     AppDataSource dataSource = AppDataSource.mock,
+    bool enableMockVerification = false,
   }) {
     return AppConfig(
       apiBaseUrl: apiBaseUrl,
       supabaseUrl: supabaseUrl,
       supabaseAnonKey: supabaseAnonKey,
       dataSource: dataSource,
+      enableMockVerification: enableMockVerification,
     );
   }
 
@@ -65,6 +73,7 @@ class AppConfig {
       supabaseUrl: String.fromEnvironment('MUKKING_SUPABASE_URL'),
       supabaseAnonKey: String.fromEnvironment('MUKKING_SUPABASE_ANON_KEY'),
       dataSource: AppDataSource.mock,
+      enableMockVerification: false,
     );
   }
 
@@ -72,6 +81,7 @@ class AppConfig {
   final String supabaseUrl;
   final String supabaseAnonKey;
   final AppDataSource dataSource;
+  final bool enableMockVerification;
 
   bool get hasSupabaseConfig =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;

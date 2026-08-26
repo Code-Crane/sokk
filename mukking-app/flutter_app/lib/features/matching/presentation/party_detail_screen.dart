@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_error.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../discovery/providers/discovery_provider.dart';
 import '../domain/matching_party.dart';
 import '../providers/matching_provider.dart';
@@ -55,6 +58,8 @@ class PartyDetailScreen extends ConsumerWidget {
         }
 
         final joinState = ref.watch(joinPartyControllerProvider);
+        final currentUser = ref.watch(currentUserProvider);
+        final isHost = currentUser?.id == party.hostUserId;
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -270,37 +275,41 @@ class PartyDetailScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: joinState.isLoading
-                  ? null
-                  : () async {
-                      final result = await ref
-                          .read(joinPartyControllerProvider.notifier)
-                          .join(party.id);
+            if (isHost)
+              _JoinRequestManagementCard(partyId: party.id)
+            else
+              FilledButton.icon(
+                onPressed: joinState.isLoading
+                    ? null
+                    : () async {
+                        final result = await ref
+                            .read(joinPartyControllerProvider.notifier)
+                            .join(party.id);
 
-                      if (!context.mounted) {
-                        return;
-                      }
+                        if (!context.mounted) {
+                          return;
+                        }
 
-                      final error = ref.read(joinPartyControllerProvider).error;
-                      final message = result?.message ??
-                          (error is ApiError
-                              ? error.userMessage
-                              : '참가 요청을 처리하지 못했어요.');
+                        final error =
+                            ref.read(joinPartyControllerProvider).error;
+                        final message = result?.message ??
+                            (error is ApiError
+                                ? error.userMessage
+                                : '참가 요청을 처리하지 못했어요.');
 
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(message)),
-                      );
-                    },
-              icon: joinState.isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.how_to_reg_rounded),
-              label: Text(joinState.isLoading ? '요청 중' : '파티 참가하기'),
-            ),
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(message)),
+                        );
+                      },
+                icon: joinState.isLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.how_to_reg_rounded),
+                label: Text(joinState.isLoading ? '요청 중' : '파티 참가하기'),
+              ),
           ],
         );
       },
@@ -322,6 +331,158 @@ class PartyDetailScreen extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+class _JoinRequestManagementCard extends ConsumerWidget {
+  const _JoinRequestManagementCard({required this.partyId});
+
+  final String partyId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requests = ref.watch(partyJoinRequestsProvider(partyId));
+    final action = ref.watch(respondJoinRequestControllerProvider(partyId));
+    final tokens = context.tokens;
+
+    return MukkingCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.manage_accounts_rounded, color: tokens.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '참가 요청 관리',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          requests.when(
+            data: (items) {
+              if (items.isEmpty) {
+                return Text(
+                  '아직 참가 요청이 없어요.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                );
+              }
+
+              return Column(
+                children: [
+                  for (final request in items)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: tokens.background,
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              request.requesterLabel,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _requestStatusLabel(request.status),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            if (request.isPending) ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: action.isLoading
+                                          ? null
+                                          : () => _respond(
+                                                context,
+                                                ref,
+                                                request.id,
+                                                'rejected',
+                                              ),
+                                      child: const Text('거절'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: FilledButton(
+                                      onPressed: action.isLoading
+                                          ? null
+                                          : () => _respond(
+                                                context,
+                                                ref,
+                                                request.id,
+                                                'accepted',
+                                              ),
+                                      child: const Text('승인'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Text(
+              error is ApiError ? error.userMessage : '참가 요청을 불러오지 못했어요.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: tokens.danger,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _respond(
+    BuildContext context,
+    WidgetRef ref,
+    String requestId,
+    String decision,
+  ) async {
+    final result = await ref
+        .read(respondJoinRequestControllerProvider(partyId).notifier)
+        .respond(requestId: requestId, decision: decision);
+
+    if (!context.mounted) return;
+    final error = ref.read(respondJoinRequestControllerProvider(partyId)).error;
+    final message = result == null
+        ? (error is ApiError ? error.userMessage : '참가 요청 처리에 실패했어요.')
+        : decision == 'accepted'
+            ? '참가 요청을 승인했어요. 채팅방이 생성됐습니다.'
+            : '참가 요청을 거절했어요.';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+
+    if (result?.chatRoomId != null) {
+      context.go(AppRoutes.chat);
+    }
+  }
+
+  String _requestStatusLabel(String status) {
+    return switch (status) {
+      'accepted' => '승인됨',
+      'rejected' => '거절됨',
+      'cancelled' => '취소됨',
+      _ => '승인 대기 중',
+    };
   }
 }
 

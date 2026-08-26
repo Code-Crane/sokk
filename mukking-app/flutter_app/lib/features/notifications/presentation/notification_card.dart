@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
-import '../domain/mock_notification.dart';
+import '../domain/app_notification.dart';
 
-class MockNotificationCard extends StatelessWidget {
-  const MockNotificationCard({
+class NotificationCard extends StatelessWidget {
+  const NotificationCard({
     required this.notification,
     required this.onTap,
     super.key,
   });
 
-  final MockNotification notification;
+  final AppNotification notification;
   final VoidCallback onTap;
 
   @override
@@ -20,7 +20,9 @@ class MockNotificationCard extends StatelessWidget {
 
     return MukkingCard(
       onTap: onTap,
-      backgroundColor: tokens.favorite.withValues(alpha: 0.1),
+      backgroundColor: tokens.favorite.withValues(
+        alpha: notification.isRead ? 0.05 : 0.1,
+      ),
       child: Row(
         children: [
           Container(
@@ -31,7 +33,9 @@ class MockNotificationCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Icon(
-              Icons.notifications_active_rounded,
+              notification.isRead
+                  ? Icons.notifications_none_rounded
+                  : Icons.notifications_active_rounded,
               color: tokens.favorite,
             ),
           ),
@@ -46,7 +50,7 @@ class MockNotificationCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  notification.message,
+                  notification.body,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
