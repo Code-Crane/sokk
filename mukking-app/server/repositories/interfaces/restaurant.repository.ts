@@ -31,5 +31,6 @@ export interface RestaurantRepository {
   ): Promise<Restaurant | null>;
   list(filter?: RestaurantFilter): Promise<RestaurantWithDistance[]>;
   create(input: CreateRestaurantInput): Promise<Restaurant>;
+  upsertMany(inputs: CreateRestaurantInput[]): Promise<Restaurant[]>;
   update(restaurantId: string, input: UpdateRestaurantInput): Promise<Restaurant>;
 }

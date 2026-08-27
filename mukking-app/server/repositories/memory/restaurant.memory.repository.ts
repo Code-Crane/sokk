@@ -4,7 +4,7 @@ import type {
   UpdateRestaurantInput
 } from "../../../shared/types";
 import { nowIso } from "../../../shared/utils/date";
-import { createEntityId } from "../../models/id";
+import { createEntityId, createProviderEntityId } from "../../models/id";
 import { db } from "../../models/inMemoryDb";
 import type {
   RestaurantFilter,
@@ -111,6 +111,58 @@ export const memoryRestaurantRepository: RestaurantRepository = {
 
     db.restaurants.set(restaurant.id, restaurant);
     return restaurant;
+  },
+
+  async upsertMany(inputs: CreateRestaurantInput[]) {
+    const uniqueInputs = Array.from(
+      new Map(
+        inputs.map((input) => [
+          `${input.placeProvider}:${input.placeProviderId}`,
+          input
+        ])
+      ).values()
+    );
+    const timestamp = nowIso();
+    const rows = uniqueInputs.map((input): Restaurant => {
+      const existing = Array.from(db.restaurants.values()).find(
+        (restaurant) =>
+          restaurant.placeProvider === input.placeProvider &&
+          restaurant.placeProviderId === input.placeProviderId
+      );
+
+      if (existing) {
+        return {
+          ...existing,
+          name: input.name,
+          address: input.address,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          category: input.category,
+          phone: input.phone,
+          roadAddress: input.roadAddress,
+          metadata: { ...existing.metadata, ...(input.metadata ?? {}) },
+          updatedAt: timestamp
+        };
+      }
+
+      return {
+        id: createProviderEntityId(
+          "restaurant",
+          input.placeProvider,
+          input.placeProviderId
+        ),
+        ...input,
+        metadata: input.metadata ?? {},
+        createdAt: timestamp,
+        updatedAt: timestamp
+      };
+    });
+
+    for (const restaurant of rows) {
+      db.restaurants.set(restaurant.id, restaurant);
+    }
+
+    return rows;
   },
 
   async update(restaurantId, input: UpdateRestaurantInput) {

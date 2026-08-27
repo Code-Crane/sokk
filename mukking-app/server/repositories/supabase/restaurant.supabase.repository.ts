@@ -5,7 +5,7 @@ import type {
 } from "../../../shared/types";
 import { nowIso } from "../../../shared/utils/date";
 import { getSupabaseServiceRoleClient } from "../../config/supabase";
-import { createEntityId } from "../../models/id";
+import { createEntityId, createProviderEntityId } from "../../models/id";
 import type {
   RestaurantFilter,
   RestaurantRepository,
@@ -94,10 +94,16 @@ export const supabaseRestaurantRepository: RestaurantRepository = {
       );
 
       if (error) throwSupabaseError(error);
-      return ((data ?? []) as NearbyRestaurantRow[]).map((row) => ({
-        restaurant: toRestaurant(row),
-        distanceMeters: Number(row.distance_meters)
-      }));
+      return ((data ?? []) as NearbyRestaurantRow[])
+        .map((row) => ({
+          restaurant: toRestaurant(row),
+          distanceMeters: Number(row.distance_meters)
+        }))
+        .sort(
+          (left, right) =>
+            left.distanceMeters - right.distanceMeters ||
+            left.restaurant.id.localeCompare(right.restaurant.id)
+        );
     }
 
     let query = getSupabaseServiceRoleClient().from("restaurants").select("*");
@@ -151,6 +157,94 @@ export const supabaseRestaurantRepository: RestaurantRepository = {
 
     if (error) throwSupabaseError(error);
     return toRestaurant(ensureRow(data, "Restaurant was not created."));
+  },
+
+  async upsertMany(inputs: CreateRestaurantInput[]) {
+    const uniqueInputs = Array.from(
+      new Map(
+        inputs.map((input) => [
+          `${input.placeProvider}:${input.placeProviderId}`,
+          input
+        ])
+      ).values()
+    );
+    if (uniqueInputs.length === 0) return [];
+
+    const client = getSupabaseServiceRoleClient();
+    const existingRows: RestaurantRow[] = [];
+    const byProvider = new Map<string, string[]>();
+
+    for (const input of uniqueInputs) {
+      const providerIds = byProvider.get(input.placeProvider) ?? [];
+      providerIds.push(input.placeProviderId);
+      byProvider.set(input.placeProvider, providerIds);
+    }
+
+    for (const [provider, providerIds] of byProvider) {
+      const { data, error } = await client
+        .from("restaurants")
+        .select("*")
+        .eq("place_provider", provider)
+        .in("place_provider_id", providerIds)
+        .returns<RestaurantRow[]>();
+      if (error) throwSupabaseError(error);
+      existingRows.push(...(data ?? []));
+    }
+
+    const existingByProviderId = new Map(
+      existingRows.map((row) => [
+        `${row.place_provider}:${row.place_provider_id}`,
+        row
+      ])
+    );
+    const timestamp = nowIso();
+    const payload = uniqueInputs.map((input) => {
+      const key = `${input.placeProvider}:${input.placeProviderId}`;
+      const existing = existingByProviderId.get(key);
+
+      return {
+        id:
+          existing?.id ??
+          createProviderEntityId(
+            "restaurant",
+            input.placeProvider,
+            input.placeProviderId
+          ),
+        name: input.name,
+        address: input.address,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        category: input.category,
+        place_provider: input.placeProvider,
+        place_provider_id: input.placeProviderId,
+        phone: input.phone ?? null,
+        road_address: input.roadAddress ?? null,
+        metadata: { ...(existing?.metadata ?? {}), ...(input.metadata ?? {}) },
+        created_at: existing?.created_at ?? timestamp,
+        updated_at: timestamp
+      };
+    });
+
+    const { data, error } = await client
+      .from("restaurants")
+      .upsert(payload, { onConflict: "place_provider,place_provider_id" })
+      .select("*")
+      .returns<RestaurantRow[]>();
+
+    if (error) throwSupabaseError(error);
+    const rowsByProviderId = new Map(
+      (data ?? []).map((row) => [
+        `${row.place_provider}:${row.place_provider_id}`,
+        toRestaurant(row)
+      ])
+    );
+
+    return uniqueInputs.map((input) => {
+      const restaurant = rowsByProviderId.get(
+        `${input.placeProvider}:${input.placeProviderId}`
+      );
+      return ensureRow(restaurant ?? null, "Restaurant was not upserted.");
+    });
   },
 
   async update(restaurantId, input: UpdateRestaurantInput) {

@@ -105,6 +105,11 @@ export const restaurantWriteRateLimit = createRateLimitMiddleware({
   ...environment.rateLimits.restaurantWrite
 });
 
+export const restaurantDiscoveryRateLimit = createRateLimitMiddleware({
+  name: "restaurant.discovery",
+  ...environment.rateLimits.restaurantDiscovery
+});
+
 export const pushDeviceRateLimit = createRateLimitMiddleware({
   name: "push.device",
   ...environment.rateLimits.pushDevice

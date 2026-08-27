@@ -59,6 +59,7 @@ export const environment = {
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+  kakaoRestApiKey: process.env.KAKAO_REST_API_KEY ?? "",
   pushProvider: process.env.PUSH_PROVIDER ?? "noop",
   firebaseUseApplicationDefaultCredentials:
     process.env.FIREBASE_USE_ADC === "true",
@@ -97,6 +98,13 @@ export const environment = {
     restaurantWrite: {
       windowMs: readNumber("RATE_LIMIT_RESTAURANT_WRITE_WINDOW_MS", defaultRateLimitWindowMs),
       max: readNumber("RATE_LIMIT_RESTAURANT_WRITE_MAX", 30)
+    },
+    restaurantDiscovery: {
+      windowMs: readNumber(
+        "RATE_LIMIT_RESTAURANT_DISCOVERY_WINDOW_MS",
+        defaultRateLimitWindowMs
+      ),
+      max: readNumber("RATE_LIMIT_RESTAURANT_DISCOVERY_MAX", 10)
     },
     pushDevice: {
       windowMs: readNumber("RATE_LIMIT_PUSH_DEVICE_WINDOW_MS", defaultRateLimitWindowMs),

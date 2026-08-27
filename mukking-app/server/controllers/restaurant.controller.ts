@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { RestaurantListQuery } from "../../shared/types";
 import type { AuthenticatedRequest } from "../models/http.types";
+import { discoverNearbyRestaurantsFromKakao } from "../services/restaurant/kakao-restaurant-discovery.service";
 import {
   addRestaurantFavorite,
   createRestaurant,
@@ -33,6 +34,24 @@ export async function listRestaurantsController(
       await listRestaurants(
         authenticatedRequest.userId,
         request.query as unknown as RestaurantListQuery
+      )
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function discoverRestaurantsController(
+  request: Request,
+  response: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const authenticatedRequest = request as AuthenticatedRequest;
+    response.json(
+      await discoverNearbyRestaurantsFromKakao(
+        authenticatedRequest.userId,
+        request.body
       )
     );
   } catch (error) {

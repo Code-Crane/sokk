@@ -78,8 +78,12 @@ function assertEnvIgnored() {
   const gitignore = fs.existsSync(gitignorePath)
     ? fs.readFileSync(gitignorePath, "utf8")
     : "";
+  const normalizedGitignore = gitignore.replace(/\r\n/g, "\n");
 
-  if (!/(^|\n)\.env(\n|$)/.test(gitignore) || !/(^|\n)\.env\.\*(\n|$)/.test(gitignore)) {
+  if (
+    !/(^|\n)\.env(\n|$)/.test(normalizedGitignore) ||
+    !/(^|\n)\.env\.\*(\n|$)/.test(normalizedGitignore)
+  ) {
     addFinding(gitignorePath, ".env and .env.* must be ignored");
   }
 }
