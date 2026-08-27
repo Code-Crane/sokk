@@ -1,15 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/config/app_config.dart';
+import '../../../core/map/kakao_map_initializer.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_error.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
-import '../../matching/domain/matching_party.dart';
 import '../../matching/providers/matching_provider.dart';
 import '../domain/restaurant.dart';
+import '../domain/restaurant_map_marker.dart';
+import '../providers/discovery_location_provider.dart';
 import '../providers/discovery_provider.dart';
+import 'map/restaurant_map_view.dart';
 import 'restaurant_bottom_sheet.dart';
+
+const fullscreenMapButtonKey = Key('open-fullscreen-map-button');
+const nearbyRestaurantListKey = Key('nearby-restaurant-list');
 
 class DiscoveryScreen extends ConsumerWidget {
   const DiscoveryScreen({super.key});
@@ -21,8 +30,12 @@ class DiscoveryScreen extends ConsumerWidget {
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final restaurants = ref.watch(filteredRestaurantsProvider);
     final selectedRestaurant = ref.watch(selectedRestaurantProvider);
-    final parties = ref.watch(matchingPartiesProvider).valueOrNull ?? const [];
     final restaurantFeed = ref.watch(restaurantFeedProvider);
+    final restaurantQuery = ref.watch(restaurantListQueryProvider);
+    final isNearbyMode = restaurantQuery.lat != null &&
+        restaurantQuery.lng != null &&
+        restaurantQuery.radiusKm != null;
+    final locationState = ref.watch(discoveryLocationProvider);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -43,9 +56,13 @@ class DiscoveryScreen extends ConsumerWidget {
               ),
             ),
             FilledButton.tonalIcon(
-              onPressed: () {},
+              onPressed: locationState.isLoading
+                  ? null
+                  : () => ref
+                      .read(discoveryLocationProvider.notifier)
+                      .loadNearbyRestaurants(),
               icon: const Icon(Icons.my_location_rounded),
-              label: const Text('지역 선택'),
+              label: Text(locationState.isLoading ? '위치 확인 중' : '내 주변 식당'),
             ),
           ],
         ),
@@ -78,14 +95,26 @@ class DiscoveryScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
+        if (locationState.status != DiscoveryLocationStatus.initial) ...[
+          _LocationStatusCard(state: locationState),
+          const SizedBox(height: 12),
+        ],
         restaurantFeed.when(
-          data: (items) => _RestaurantFeedStatus(
-            message: '주변 맛집 ${items.length}곳을 불러왔어요.',
-            icon: Icons.restaurant_rounded,
-          ),
+          data: (items) {
+            final message = isNearbyMode
+                ? items.isEmpty
+                    ? '현재 위치 5km 안에 등록된 식당이 없어요.'
+                    : '현재 위치 5km 안의 식당 ${items.length}곳을 불러왔어요.'
+                : '맛집 ${items.length}곳을 불러왔어요.';
+            return _RestaurantFeedStatus(
+              message: message,
+              icon: Icons.restaurant_rounded,
+            );
+          },
           loading: () => const _RestaurantFeedStatus(
-            message: '주변 맛집을 불러오는 중이에요.',
+            message: '식당 목록을 불러오는 중이에요.',
             icon: Icons.sync_rounded,
+            showProgress: true,
           ),
           error: (error, _) => _RestaurantFeedStatus(
             message:
@@ -95,24 +124,37 @@ class DiscoveryScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 12),
-        _MapPlaceholder(
-          restaurants: restaurants,
-          parties: parties,
-          selectedRestaurant: selectedRestaurant,
-          onSelect: (restaurant) {
-            ref.read(selectedRestaurantIdProvider.notifier).state =
-                restaurant.id;
-          },
-        ),
+        const _DiscoveryMapSection(),
         const SizedBox(height: 12),
         const _MapLegendRow(),
         const SizedBox(height: 16),
+        if (restaurants.isNotEmpty) ...[
+          Text(
+            isNearbyMode ? '내 주변 식당' : '식당 목록',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 10),
+          _RestaurantList(
+            key: nearbyRestaurantListKey,
+            restaurants: restaurants,
+            selectedRestaurantId: selectedRestaurant?.id,
+            onSelect: (restaurantId) => _selectRestaurant(
+              context,
+              ref,
+              restaurantId,
+              focusCamera: true,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         if (selectedRestaurant != null)
           RestaurantBottomSheet(restaurant: selectedRestaurant)
         else
           MukkingCard(
             child: Text(
-              '선택 가능한 식당이 없어요. 카테고리 필터를 변경해보세요.',
+              isNearbyMode
+                  ? '현재 위치 5km 안에 등록된 식당이 없어요.'
+                  : '선택 가능한 식당이 없어요. 카테고리 필터를 변경해보세요.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
@@ -121,23 +163,110 @@ class DiscoveryScreen extends ConsumerWidget {
   }
 }
 
+class _DiscoveryMapSection extends ConsumerWidget {
+  const _DiscoveryMapSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final restaurants = ref.watch(filteredRestaurantsProvider);
+    final selectedRestaurant = ref.watch(selectedRestaurantProvider);
+    final selectedRestaurantFocusRequest =
+        ref.watch(selectedRestaurantFocusRequestProvider);
+    final parties = ref.watch(matchingPartiesProvider).valueOrNull ?? const [];
+    final config = ref.watch(appConfigProvider);
+    final kakaoMapReady = ref.watch(kakaoMapReadyProvider);
+    final location = ref.watch(
+      discoveryLocationProvider.select((state) => state.location),
+    );
+    final urgentRestaurantIds = parties
+        .where((party) => party.isUrgent)
+        .map((party) => party.restaurantId)
+        .toSet();
+    final markers = buildRestaurantMapMarkers(
+      restaurants,
+      urgentRestaurantIds: urgentRestaurantIds,
+    );
+
+    return Stack(
+      children: [
+        RestaurantMapView(
+          enableMap: config.hasAnyKakaoMapConfig && kakaoMapReady,
+          restaurants: restaurants,
+          markers: markers,
+          selectedRestaurantId: selectedRestaurant?.id,
+          focusSelectedRestaurantRequest: selectedRestaurantFocusRequest,
+          userLocation: location,
+          onMarkerSelected: (restaurantId) => _selectRestaurant(
+            context,
+            ref,
+            restaurantId,
+            focusCamera: false,
+          ),
+        ),
+        Positioned(
+          top: 12,
+          right: 12,
+          child: Material(
+            elevation: 3,
+            borderRadius: BorderRadius.circular(16),
+            child: IconButton.filledTonal(
+              key: fullscreenMapButtonKey,
+              tooltip: '전체 화면 지도',
+              onPressed: () => context.push(AppRoutes.discoveryMap),
+              icon: const Icon(Icons.fullscreen_rounded),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+void _selectRestaurant(
+  BuildContext context,
+  WidgetRef ref,
+  String restaurantId, {
+  required bool focusCamera,
+}) {
+  final restaurant = ref.read(restaurantByIdProvider(restaurantId));
+  if (restaurant == null) return;
+
+  ref.read(selectedRestaurantIdProvider.notifier).state = restaurantId;
+  if (focusCamera) {
+    ref.read(selectedRestaurantFocusRequestProvider.notifier).state += 1;
+  }
+  showRestaurantDetailsSheet(context, restaurantId: restaurantId);
+}
+
 class _RestaurantFeedStatus extends StatelessWidget {
   const _RestaurantFeedStatus({
     required this.message,
     required this.icon,
     this.onRetry,
+    this.showProgress = false,
   });
 
   final String message;
   final IconData icon;
   final VoidCallback? onRetry;
+  final bool showProgress;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
     return Row(
       children: [
-        Icon(icon, size: 18, color: tokens.primary),
+        if (showProgress)
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: tokens.primary,
+            ),
+          )
+        else
+          Icon(icon, size: 18, color: tokens.primary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
@@ -149,203 +278,200 @@ class _RestaurantFeedStatus extends StatelessWidget {
   }
 }
 
-class _MapPlaceholder extends StatelessWidget {
-  const _MapPlaceholder({
-    required this.restaurants,
-    required this.parties,
-    required this.selectedRestaurant,
-    required this.onSelect,
-  });
+class _LocationStatusCard extends ConsumerWidget {
+  const _LocationStatusCard({required this.state});
 
-  final List<Restaurant> restaurants;
-  final List<MatchingParty> parties;
-  final Restaurant? selectedRestaurant;
-  final ValueChanged<Restaurant> onSelect;
+  final DiscoveryLocationState state;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
+    final controller = ref.read(discoveryLocationProvider.notifier);
+    final (icon, message) = switch (state.status) {
+      DiscoveryLocationStatus.requestingPermission => (
+          Icons.location_searching_rounded,
+          '위치 권한을 확인하고 있어요.'
+        ),
+      DiscoveryLocationStatus.loadingLocation => (
+          Icons.location_searching_rounded,
+          '현재 위치를 찾고 있어요.'
+        ),
+      DiscoveryLocationStatus.loadingRestaurants => (
+          Icons.restaurant_rounded,
+          '내 주변 맛집을 불러오고 있어요.'
+        ),
+      DiscoveryLocationStatus.restaurantError => (
+          Icons.error_outline_rounded,
+          state.message ?? '주변 식당을 불러오지 못했어요.'
+        ),
+      DiscoveryLocationStatus.permissionDenied => (
+          Icons.location_off_rounded,
+          state.message ?? '위치 권한이 필요해요.'
+        ),
+      DiscoveryLocationStatus.permissionDeniedForever => (
+          Icons.settings_rounded,
+          state.message ?? '앱 설정에서 권한을 허용해주세요.'
+        ),
+      DiscoveryLocationStatus.serviceDisabled => (
+          Icons.gps_off_rounded,
+          state.message ?? '위치 서비스가 꺼져 있어요.'
+        ),
+      DiscoveryLocationStatus.ready => (
+          Icons.near_me_rounded,
+          state.message ?? '내 주변 맛집을 표시하고 있어요.'
+        ),
+      DiscoveryLocationStatus.error => (
+          Icons.error_outline_rounded,
+          state.message ?? '위치를 불러오지 못했어요.'
+        ),
+      DiscoveryLocationStatus.initial => (
+          Icons.my_location_rounded,
+          '내 주변 식당을 찾아보세요.'
+        ),
+    };
 
     return MukkingCard(
-      padding: EdgeInsets.zero,
-      child: SizedBox(
-        height: 348,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return Stack(
-                children: [
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            tokens.mapMarker.withValues(alpha: 0.18),
-                            tokens.background,
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 18,
-                    top: 18,
-                    child: _MapFloatingLabel(
-                      title: '지도 placeholder',
-                      subtitle: 'Naver Map SDK는 아직 연결하지 않음',
-                    ),
-                  ),
-                  Positioned(
-                    right: 18,
-                    bottom: 18,
-                    child: _MapFloatingLabel(
-                      title: 'Mock markers',
-                      subtitle: '찜/파티/마감 상태 반영',
-                    ),
-                  ),
-                  for (final restaurant in restaurants)
-                    Positioned(
-                      left: restaurant.markerDx * constraints.maxWidth,
-                      top: restaurant.markerDy * constraints.maxHeight,
-                      child: _RestaurantMarker(
-                        restaurant: restaurant,
-                        status: _markerStatus(restaurant, parties),
-                        isSelected: restaurant.id == selectedRestaurant?.id,
-                        onTap: () => onSelect(restaurant),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  _RestaurantMarkerStatus _markerStatus(
-    Restaurant restaurant,
-    List<MatchingParty> parties,
-  ) {
-    if (restaurant.isFavorite) {
-      return _RestaurantMarkerStatus.favorite;
-    }
-
-    final restaurantParties =
-        parties.where((party) => party.restaurantId == restaurant.id);
-
-    if (restaurantParties.any((party) => party.isUrgent)) {
-      return _RestaurantMarkerStatus.urgentParty;
-    }
-
-    if (restaurantParties.isNotEmpty) {
-      return _RestaurantMarkerStatus.activeParty;
-    }
-
-    return _RestaurantMarkerStatus.normal;
-  }
-}
-
-class _MapFloatingLabel extends StatelessWidget {
-  const _MapFloatingLabel({
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = context.tokens;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: tokens.surface.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         children: [
-          Text(title, style: Theme.of(context).textTheme.labelLarge),
-          Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+          Icon(icon, color: tokens.primary),
+          const SizedBox(width: 12),
+          Expanded(child: Text(message)),
+          if (state.status == DiscoveryLocationStatus.serviceDisabled)
+            TextButton(
+              onPressed: controller.openLocationSettings,
+              child: const Text('위치 설정'),
+            )
+          else if (state.status ==
+              DiscoveryLocationStatus.permissionDeniedForever)
+            TextButton(
+              onPressed: controller.openAppSettings,
+              child: const Text('앱 설정'),
+            )
+          else if (state.status == DiscoveryLocationStatus.permissionDenied ||
+              state.status == DiscoveryLocationStatus.error ||
+              state.status == DiscoveryLocationStatus.restaurantError)
+            TextButton(
+              onPressed: controller.loadNearbyRestaurants,
+              child: const Text('다시 시도'),
+            )
+          else if (state.status == DiscoveryLocationStatus.ready)
+            TextButton(
+              onPressed: controller.useGeneralRestaurantList,
+              child: const Text('일반 목록'),
+            ),
         ],
       ),
     );
   }
 }
 
-enum _RestaurantMarkerStatus {
-  normal,
-  favorite,
-  activeParty,
-  urgentParty;
-}
-
-class _RestaurantMarker extends StatelessWidget {
-  const _RestaurantMarker({
-    required this.restaurant,
-    required this.status,
-    required this.isSelected,
-    required this.onTap,
+class _RestaurantList extends StatelessWidget {
+  const _RestaurantList({
+    required this.restaurants,
+    required this.selectedRestaurantId,
+    required this.onSelect,
+    super.key,
   });
 
-  final Restaurant restaurant;
-  final _RestaurantMarkerStatus status;
-  final bool isSelected;
-  final VoidCallback onTap;
+  final List<Restaurant> restaurants;
+  final String? selectedRestaurantId;
+  final ValueChanged<String> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
-    final markerColor = switch (status) {
-      _RestaurantMarkerStatus.urgentParty => tokens.partyUrgent,
-      _RestaurantMarkerStatus.activeParty => tokens.partyHot,
-      _RestaurantMarkerStatus.favorite => tokens.favorite,
-      _RestaurantMarkerStatus.normal => tokens.mapMarker,
-    };
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: isSelected ? markerColor : tokens.surface,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: markerColor.withValues(alpha: 0.48)),
-          boxShadow: [
-            BoxShadow(
-              color: tokens.textPrimary.withValues(alpha: 0.12),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              status == _RestaurantMarkerStatus.favorite
-                  ? Icons.favorite_rounded
-                  : Icons.location_on_rounded,
-              color: isSelected ? tokens.surface : markerColor,
-              size: 18,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              restaurant.category,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: isSelected ? tokens.surface : tokens.textPrimary,
+    return SizedBox(
+      height: 148,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: restaurants.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final restaurant = restaurants[index];
+          final selected = restaurant.id == selectedRestaurantId;
+          return InkWell(
+            key: ValueKey('nearby-restaurant-card-${restaurant.id}'),
+            onTap: () => onSelect(restaurant.id),
+            borderRadius: BorderRadius.circular(20),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 250,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: selected
+                    ? tokens.primary.withValues(alpha: 0.1)
+                    : tokens.surface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: selected
+                      ? tokens.primary
+                      : tokens.textSecondary.withValues(alpha: 0.22),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    restaurant.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          [
+                            if (restaurant.category.isNotEmpty)
+                              restaurant.category,
+                            restaurant.distanceLabel,
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        restaurant.isFavorite
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        size: 18,
+                        color: restaurant.isFavorite
+                            ? tokens.favorite
+                            : tokens.textSecondary,
+                      ),
+                    ],
+                  ),
+                  if (restaurant.address.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      restaurant.address,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Icon(Icons.groups_rounded,
+                          size: 17, color: tokens.partyHot),
+                      const SizedBox(width: 5),
+                      Text(
+                        '모집 중 ${restaurant.activePartyCount}개',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: tokens.partyHot,
+                            ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

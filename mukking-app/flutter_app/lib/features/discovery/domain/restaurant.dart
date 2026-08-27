@@ -4,6 +4,8 @@ class Restaurant {
     required this.name,
     required this.category,
     required this.address,
+    required this.latitude,
+    required this.longitude,
     required this.distanceMeters,
     required this.imageUrl,
     required this.isFavorite,
@@ -17,6 +19,8 @@ class Restaurant {
   final String name;
   final String category;
   final String address;
+  final double? latitude;
+  final double? longitude;
   final int? distanceMeters;
   final String imageUrl;
   final bool isFavorite;
@@ -37,6 +41,10 @@ class Restaurant {
     String? name,
     String? category,
     String? address,
+    double? latitude,
+    bool clearLatitude = false,
+    double? longitude,
+    bool clearLongitude = false,
     int? distanceMeters,
     bool clearDistance = false,
     String? imageUrl,
@@ -51,6 +59,8 @@ class Restaurant {
       name: name ?? this.name,
       category: category ?? this.category,
       address: address ?? this.address,
+      latitude: clearLatitude ? null : latitude ?? this.latitude,
+      longitude: clearLongitude ? null : longitude ?? this.longitude,
       distanceMeters:
           clearDistance ? null : distanceMeters ?? this.distanceMeters,
       imageUrl: imageUrl ?? this.imageUrl,
@@ -61,4 +71,6 @@ class Restaurant {
       markerDy: markerDy ?? this.markerDy,
     );
   }
+
+  bool get hasCoordinates => latitude != null && longitude != null;
 }

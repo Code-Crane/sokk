@@ -140,6 +140,8 @@ class _FakeRestaurantRepository implements RestaurantRepository {
         name: '지속성 테스트 식당',
         category: '한식',
         address: '서울시 성동구',
+        latitude: 37.5,
+        longitude: 127.0,
         distanceMeters: 420,
         imageUrl: '',
         isFavorite: _isFavorite,

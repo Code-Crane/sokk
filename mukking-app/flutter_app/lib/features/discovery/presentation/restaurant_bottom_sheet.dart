@@ -9,6 +9,41 @@ import '../../matching/providers/matching_provider.dart';
 import '../domain/restaurant.dart';
 import '../providers/discovery_provider.dart';
 
+const restaurantDetailsSheetKey = Key('restaurant-details-sheet');
+
+Future<void> showRestaurantDetailsSheet(
+  BuildContext context, {
+  required String restaurantId,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    showDragHandle: true,
+    builder: (_) => _RestaurantDetailsSheet(restaurantId: restaurantId),
+  );
+}
+
+class _RestaurantDetailsSheet extends ConsumerWidget {
+  const _RestaurantDetailsSheet({required this.restaurantId});
+
+  final String restaurantId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final restaurant = ref.watch(restaurantByIdProvider(restaurantId));
+    if (restaurant == null) {
+      return const SizedBox.shrink();
+    }
+
+    return SingleChildScrollView(
+      key: restaurantDetailsSheetKey,
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      child: RestaurantBottomSheet(restaurant: restaurant),
+    );
+  }
+}
+
 class RestaurantBottomSheet extends ConsumerWidget {
   const RestaurantBottomSheet({
     required this.restaurant,
@@ -75,14 +110,19 @@ class RestaurantBottomSheet extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${restaurant.category} · ${restaurant.distanceLabel}',
+                      [
+                        if (restaurant.category.isNotEmpty) restaurant.category,
+                        restaurant.distanceLabel,
+                      ].join(' · '),
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      restaurant.address,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
+                    if (restaurant.address.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        restaurant.address,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
                     const SizedBox(height: 6),
                     partiesAsync.when(
                       data: (_) => Text(

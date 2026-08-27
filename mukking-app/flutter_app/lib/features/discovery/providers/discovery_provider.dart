@@ -10,6 +10,7 @@ import '../domain/restaurant.dart';
 
 final selectedCategoryProvider = StateProvider<String>((ref) => '전체');
 final selectedRestaurantIdProvider = StateProvider<String?>((ref) => null);
+final selectedRestaurantFocusRequestProvider = StateProvider<int>((ref) => 0);
 
 final restaurantListQueryProvider = StateProvider<RestaurantListQuery>((ref) {
   return const RestaurantListQuery(limit: 50, offset: 0);

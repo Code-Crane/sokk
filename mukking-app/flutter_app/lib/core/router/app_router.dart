@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/discovery/presentation/discovery_screen.dart';
+import '../../features/discovery/presentation/fullscreen_map_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/matching/presentation/create_party_screen.dart';
 import '../../features/matching/presentation/party_detail_screen.dart';
@@ -11,11 +12,16 @@ import '../../features/profile/presentation/my_screen.dart';
 import '../../widgets/app_shell.dart';
 import 'app_routes.dart';
 
+final _rootNavigatorKey = GlobalKey<NavigatorState>();
+final _shellNavigatorKey = GlobalKey<NavigatorState>();
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: _rootNavigatorKey,
     initialLocation: AppRoutes.home,
     routes: [
       ShellRoute(
+        navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) {
           return AppShell(child: child);
         },
@@ -31,6 +37,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) {
               return const NoTransitionPage(child: DiscoveryScreen());
             },
+            routes: [
+              GoRoute(
+                path: 'map',
+                parentNavigatorKey: _rootNavigatorKey,
+                pageBuilder: (context, state) {
+                  return const MaterialPage(
+                    fullscreenDialog: true,
+                    child: FullscreenMapScreen(),
+                  );
+                },
+              ),
+            ],
           ),
           GoRoute(
             path: AppRoutes.createParty,

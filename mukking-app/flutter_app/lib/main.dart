@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/config/app_config.dart';
+import 'core/map/kakao_map_initializer.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
@@ -13,6 +14,7 @@ Future<void> main() async {
 
   final appConfig = AppConfig.fromEnvironment();
   final preferences = await SharedPreferences.getInstance();
+  var kakaoMapReady = false;
 
   if (appConfig.hasSupabaseConfig) {
     await Supabase.initialize(
@@ -21,10 +23,18 @@ Future<void> main() async {
     );
   }
 
+  if (appConfig.hasAnyKakaoMapConfig) {
+    kakaoMapReady = await initializeKakaoMap(
+      nativeAppKey: appConfig.kakaoNativeAppKey,
+      javascriptKey: appConfig.kakaoJavascriptKey,
+    );
+  }
+
   runApp(
     ProviderScope(
       overrides: [
         appConfigProvider.overrideWithValue(appConfig),
+        kakaoMapReadyProvider.overrideWithValue(kakaoMapReady),
         sharedPreferencesProvider.overrideWithValue(preferences),
       ],
       child: const MukkingApp(),

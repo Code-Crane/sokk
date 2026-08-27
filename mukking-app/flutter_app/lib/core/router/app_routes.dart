@@ -3,6 +3,7 @@ class AppRoutes {
 
   static const home = '/';
   static const discovery = '/discovery';
+  static const discoveryMap = '/discovery/map';
   static const createParty = '/create-party';
   static const chat = '/chat';
   static const my = '/my';

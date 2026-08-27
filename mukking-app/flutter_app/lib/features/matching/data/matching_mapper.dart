@@ -59,6 +59,8 @@ class MatchingPostMapper {
       name: post.restaurantName,
       category: '맛집',
       address: post.address,
+      latitude: null,
+      longitude: null,
       distanceMeters: null,
       imageUrl: '',
       imageLabel: post.restaurantName,

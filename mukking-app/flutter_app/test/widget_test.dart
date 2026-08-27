@@ -8,6 +8,10 @@ import 'package:mukking_flutter_app/features/chat/providers/chat_provider.dart';
 import 'package:mukking_flutter_app/features/discovery/providers/discovery_provider.dart';
 import 'package:mukking_flutter_app/features/discovery/data/restaurant_api.dart';
 import 'package:mukking_flutter_app/features/discovery/data/restaurant_repository.dart';
+import 'package:mukking_flutter_app/features/discovery/domain/restaurant.dart';
+import 'package:mukking_flutter_app/features/discovery/presentation/discovery_screen.dart';
+import 'package:mukking_flutter_app/features/discovery/presentation/fullscreen_map_screen.dart';
+import 'package:mukking_flutter_app/features/discovery/presentation/restaurant_bottom_sheet.dart';
 import 'package:mukking_flutter_app/features/home/providers/home_provider.dart';
 import 'package:mukking_flutter_app/features/matching/providers/matching_provider.dart';
 import 'package:mukking_flutter_app/features/matching/data/matching_api.dart';
@@ -39,12 +43,180 @@ void main() {
     await tester.tap(find.text('발견'));
     await tester.pumpAndSettle();
 
-    expect(find.text('지도 placeholder'), findsOneWidget);
+    expect(find.text('Kakao Map 설정 필요'), findsOneWidget);
     await tester.drag(find.byType(ListView), const Offset(0, -520));
     await tester.pumpAndSettle();
-    expect(find.text('멘야 하쿠'), findsOneWidget);
-    expect(find.text('라멘 · 800m'), findsOneWidget);
+    expect(find.text('멘야 하쿠'), findsWidgets);
+    expect(find.text('라멘 · 800m'), findsWidgets);
     expect(find.text('현재 모집 중 파티 2개'), findsOneWidget);
+  });
+
+  testWidgets('restaurant marker opens details and keeps favorite flow',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MukkingApp(),
+      ),
+    );
+    await tester.tap(find.text('발견'));
+    await tester.pumpAndSettle();
+
+    final marker = find.byKey(
+      const ValueKey('restaurant-map-marker-restaurant-001'),
+    );
+    expect(marker, findsOneWidget);
+    final markerSize = tester.getSize(marker);
+    expect(markerSize.width, greaterThanOrEqualTo(44));
+    expect(markerSize.height, greaterThanOrEqualTo(44));
+
+    await tester.tap(marker);
+    await tester.pumpAndSettle();
+
+    expect(container.read(selectedRestaurantFocusRequestProvider), 0);
+    expect(find.byKey(restaurantDetailsSheetKey), findsOneWidget);
+    expect(find.text('멘야 하쿠'), findsWidgets);
+    expect(find.text('라멘 · 800m'), findsWidgets);
+    expect(find.text('현재 모집 중 파티 2개'), findsWidgets);
+    await tester.tap(find.text('가고 싶어요').last);
+    await tester.pumpAndSettle();
+    expect(find.text('찜 취소'), findsOneWidget);
+    expect(container.read(selectedRestaurantFocusRequestProvider), 0);
+  });
+
+  testWidgets('nearby restaurant card selects restaurant and opens details',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.read(restaurantListQueryProvider.notifier).state =
+        const RestaurantListQuery(
+      lat: 37.5,
+      lng: 127.0,
+      radiusKm: 5,
+      limit: 50,
+      offset: 0,
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MukkingApp(),
+      ),
+    );
+    await tester.tap(find.text('발견'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(nearbyRestaurantListKey), findsOneWidget);
+    final card = find.byKey(
+      const ValueKey('nearby-restaurant-card-restaurant-001'),
+    );
+    expect(card, findsOneWidget);
+    expect(find.text('라멘 · 800m'), findsWidgets);
+
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+
+    expect(
+      container.read(selectedRestaurantIdProvider),
+      'restaurant-001',
+    );
+    expect(container.read(selectedRestaurantFocusRequestProvider), 1);
+    expect(find.byKey(restaurantDetailsSheetKey), findsOneWidget);
+    expect(find.text('멘야 하쿠'), findsWidgets);
+    expect(find.text('현재 모집 중 파티 2개'), findsWidgets);
+    expect(container.read(selectedRestaurantFocusRequestProvider), 1);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+    expect(container.read(selectedRestaurantFocusRequestProvider), 2);
+  });
+
+  testWidgets('empty nearby response explains the five kilometer context',
+      (tester) async {
+    final container = ProviderContainer(
+      overrides: [
+        restaurantRepositoryProvider.overrideWithValue(
+          _EmptyRestaurantRepository(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(restaurantListQueryProvider.notifier).state =
+        const RestaurantListQuery(
+      lat: 37.5,
+      lng: 127.0,
+      radiusKm: 5,
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MukkingApp(),
+      ),
+    );
+    await tester.tap(find.text('발견'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('현재 위치 5km 안에 등록된 식당이 없어요.'),
+      findsWidgets,
+    );
+    expect(find.byKey(nearbyRestaurantListKey), findsNothing);
+  });
+
+  testWidgets('fullscreen map opens, keeps marker interaction and closes',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MukkingApp(),
+      ),
+    );
+    await tester.tap(find.text('발견'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(fullscreenMapButtonKey), findsOneWidget);
+    await tester.tap(find.byKey(fullscreenMapButtonKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(fullscreenMapScreenKey), findsOneWidget);
+    expect(find.byKey(closeFullscreenMapButtonKey), findsOneWidget);
+    expect(find.byKey(focusCurrentLocationButtonKey), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('restaurant-map-marker-restaurant-002')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byKey(restaurantDetailsSheetKey), findsOneWidget);
+    expect(find.text('성수 숯불연구소'), findsWidgets);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(restaurantDetailsSheetKey), findsNothing);
+    expect(find.byKey(fullscreenMapScreenKey), findsOneWidget);
+
+    await tester.binding.setSurfaceSize(const Size(1200, 700));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byKey(closeFullscreenMapButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(fullscreenMapScreenKey), findsNothing);
+    expect(find.byKey(fullscreenMapButtonKey), findsOneWidget);
+
+    await tester.tap(find.byKey(fullscreenMapButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(fullscreenMapScreenKey), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(fullscreenMapScreenKey), findsNothing);
+    expect(find.byKey(fullscreenMapButtonKey), findsOneWidget);
   });
 
   testWidgets('MY login button is connected and validates form',
@@ -253,4 +425,23 @@ void main() {
       isA<ApiNotificationRepository>(),
     );
   });
+}
+
+class _EmptyRestaurantRepository implements RestaurantRepository {
+  @override
+  Future<Restaurant?> getById(String restaurantId) async => null;
+
+  @override
+  Future<List<Restaurant>> list(RestaurantListQuery query) async => const [];
+
+  @override
+  Future<List<Restaurant>> listFavorites() async => const [];
+
+  @override
+  Future<Restaurant> setFavorite(
+    Restaurant restaurant,
+    bool isFavorite,
+  ) async {
+    return restaurant.copyWith(isFavorite: isFavorite);
+  }
 }

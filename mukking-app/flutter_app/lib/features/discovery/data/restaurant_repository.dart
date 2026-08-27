@@ -66,6 +66,8 @@ class ApiRestaurantRepository implements RestaurantRepository {
       name: dto.name,
       category: dto.category,
       address: dto.address,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
       distanceMeters: dto.distanceMeters,
       imageUrl: dto.imageUrl ?? '',
       isFavorite: dto.isFavorite,
