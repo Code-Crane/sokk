@@ -13,10 +13,13 @@ import '../providers/discovery_provider.dart';
 import 'map/restaurant_map_view.dart';
 import 'map/kakao_marker_adapter.dart';
 import 'restaurant_bottom_sheet.dart';
+import 'search_this_area_button.dart';
 
 const fullscreenMapScreenKey = Key('fullscreen-map-screen');
 const closeFullscreenMapButtonKey = Key('close-fullscreen-map-button');
 const focusCurrentLocationButtonKey = Key('focus-current-location-button');
+const fullscreenSearchThisAreaButtonKey =
+    Key('fullscreen-search-this-area-button');
 
 class FullscreenMapScreen extends ConsumerStatefulWidget {
   const FullscreenMapScreen({super.key});
@@ -40,6 +43,7 @@ class _FullscreenMapScreenState extends ConsumerState<FullscreenMapScreen> {
     final locationState = ref.watch(discoveryLocationProvider);
     final config = ref.watch(appConfigProvider);
     final kakaoMapReady = ref.watch(kakaoMapReadyProvider);
+    final searchAreaState = ref.watch(searchAreaProvider);
     final urgentRestaurantIds = parties
         .where((party) => party.isUrgent)
         .map((party) => party.restaurantId)
@@ -63,8 +67,10 @@ class _FullscreenMapScreenState extends ConsumerState<FullscreenMapScreen> {
             focusSelectedRestaurantRequest: selectedRestaurantFocusRequest,
             userLocation: locationState.location,
             onMarkerSelected: _selectRestaurant,
+            onCameraIdle: ref.read(searchAreaProvider.notifier).onCameraIdle,
             expanded: true,
             focusCurrentLocationRequest: _focusCurrentLocationRequest,
+            initialCenter: searchAreaState.center,
           ),
           SafeArea(
             child: Padding(
@@ -87,6 +93,17 @@ class _FullscreenMapScreenState extends ConsumerState<FullscreenMapScreen> {
                         locationState.isLoading ? null : _focusCurrentLocation,
                   ),
                 ],
+              ),
+            ),
+          ),
+          const SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(top: 72, left: 16, right: 16),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: SearchThisAreaButton(
+                  buttonKey: fullscreenSearchThisAreaButtonKey,
+                ),
               ),
             ),
           ),

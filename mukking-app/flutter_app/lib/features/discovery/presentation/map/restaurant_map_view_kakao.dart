@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:kakao_maps_flutter/kakao_maps_flutter.dart';
 
 import '../../domain/restaurant.dart';
+import '../../domain/map_camera_center.dart';
 import '../../domain/restaurant_map_marker.dart';
 import '../../domain/user_location.dart';
 import 'kakao_marker_adapter.dart';
@@ -19,8 +20,10 @@ class KakaoRestaurantMap extends StatefulWidget {
     required this.focusSelectedRestaurantRequest,
     required this.userLocation,
     required this.onMarkerSelected,
+    required this.onCameraIdle,
     this.expanded = false,
     this.focusCurrentLocationRequest = 0,
+    this.initialCenter,
     super.key,
   });
 
@@ -30,8 +33,10 @@ class KakaoRestaurantMap extends StatefulWidget {
   final int focusSelectedRestaurantRequest;
   final UserLocation? userLocation;
   final ValueChanged<String> onMarkerSelected;
+  final ValueChanged<MapCameraIdleEvent> onCameraIdle;
   final bool expanded;
   final int focusCurrentLocationRequest;
+  final MapCameraCenter? initialCenter;
 
   @override
   State<KakaoRestaurantMap> createState() => _KakaoRestaurantMapState();
@@ -47,11 +52,14 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
   KakaoMapController? _controller;
   RestaurantCameraCoordinator? _cameraCoordinator;
   StreamSubscription<LabelClickEvent>? _labelClickSubscription;
+  StreamSubscription<CameraMoveEndEvent>? _cameraMoveEndSubscription;
+  Timer? _programmaticMoveTimer;
   Map<String, MarkerOption> _renderedMarkers = const {};
   bool _markerSyncRunning = false;
   bool _markerSyncPending = false;
   bool _didFitInitialContent = false;
   bool _mapUnavailable = false;
+  bool _programmaticCameraMovePending = true;
 
   @override
   void didUpdateWidget(covariant KakaoRestaurantMap oldWidget) {
@@ -81,6 +89,8 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
   void dispose() {
     _cameraCoordinator?.dispose();
     _labelClickSubscription?.cancel();
+    _cameraMoveEndSubscription?.cancel();
+    _programmaticMoveTimer?.cancel();
     _controller?.dispose();
     super.dispose();
   }
@@ -117,6 +127,12 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
   }
 
   LatLng get _initialTarget {
+    if (widget.initialCenter case final center?) {
+      return LatLng(
+        latitude: center.latitude,
+        longitude: center.longitude,
+      );
+    }
     final selectedId = widget.selectedRestaurantId;
     if (selectedId != null) {
       for (final marker in widget.markers) {
@@ -145,16 +161,25 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
     if (_controller != null) return;
     _controller = controller;
     _cameraCoordinator = RestaurantCameraCoordinator(
-      move: (update) => controller.moveCamera(
-        cameraUpdate: update,
-        animation: _cameraAnimation,
-      ),
+      move: _moveCameraProgrammatically,
     );
     _labelClickSubscription = controller.onLabelClickedStream.listen((event) {
       if (isRestaurantMarkerTap(event.labelId, widget.markers)) {
         widget.onMarkerSelected(event.labelId);
       }
     });
+    _cameraMoveEndSubscription = controller.onCameraMoveEndStream.listen(
+      _onCameraMoveEnd,
+    );
+    widget.onCameraIdle(
+      MapCameraIdleEvent(
+        center: MapCameraCenter(
+          latitude: _initialTarget.latitude,
+          longitude: _initialTarget.longitude,
+        ),
+        userInitiated: false,
+      ),
+    );
 
     try {
       if (!kIsWeb) {
@@ -247,9 +272,36 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
     }
 
     final update = CameraUpdate.fromBounds(_boundsFor(points), padding: 56);
+    await _moveCameraProgrammatically(update);
+  }
+
+  Future<void> _moveCameraProgrammatically(CameraUpdate update) async {
+    final controller = _controller;
+    if (controller == null) return;
+    _programmaticCameraMovePending = true;
+    _programmaticMoveTimer?.cancel();
+    _programmaticMoveTimer = Timer(
+      const Duration(seconds: 1),
+      () => _programmaticCameraMovePending = false,
+    );
     await controller.moveCamera(
       cameraUpdate: update,
       animation: _cameraAnimation,
+    );
+  }
+
+  void _onCameraMoveEnd(CameraMoveEndEvent event) {
+    final wasProgrammatic = _programmaticCameraMovePending;
+    _programmaticCameraMovePending = false;
+    _programmaticMoveTimer?.cancel();
+    widget.onCameraIdle(
+      MapCameraIdleEvent(
+        center: MapCameraCenter(
+          latitude: event.latitude,
+          longitude: event.longitude,
+        ),
+        userInitiated: !wasProgrammatic,
+      ),
     );
   }
 

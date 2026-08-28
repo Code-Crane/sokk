@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/restaurant.dart';
+import '../../domain/map_camera_center.dart';
 import '../../domain/restaurant_map_marker.dart';
 import '../../domain/user_location.dart';
 import 'restaurant_map_fallback.dart';
@@ -15,8 +16,10 @@ class RestaurantMapView extends StatelessWidget {
     required this.focusSelectedRestaurantRequest,
     required this.userLocation,
     required this.onMarkerSelected,
+    required this.onCameraIdle,
     this.expanded = false,
     this.focusCurrentLocationRequest = 0,
+    this.initialCenter,
     super.key,
   });
 
@@ -27,8 +30,10 @@ class RestaurantMapView extends StatelessWidget {
   final int focusSelectedRestaurantRequest;
   final UserLocation? userLocation;
   final ValueChanged<String> onMarkerSelected;
+  final ValueChanged<MapCameraIdleEvent> onCameraIdle;
   final bool expanded;
   final int focusCurrentLocationRequest;
+  final MapCameraCenter? initialCenter;
 
   @override
   Widget build(BuildContext context) {
@@ -51,8 +56,10 @@ class RestaurantMapView extends StatelessWidget {
       focusSelectedRestaurantRequest: focusSelectedRestaurantRequest,
       userLocation: userLocation,
       onMarkerSelected: onMarkerSelected,
+      onCameraIdle: onCameraIdle,
       expanded: expanded,
       focusCurrentLocationRequest: focusCurrentLocationRequest,
+      initialCenter: initialCenter,
     );
   }
 }

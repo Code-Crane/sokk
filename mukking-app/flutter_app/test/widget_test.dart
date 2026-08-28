@@ -9,6 +9,7 @@ import 'package:mukking_flutter_app/features/discovery/providers/discovery_provi
 import 'package:mukking_flutter_app/features/discovery/data/restaurant_api.dart';
 import 'package:mukking_flutter_app/features/discovery/data/restaurant_repository.dart';
 import 'package:mukking_flutter_app/features/discovery/domain/restaurant.dart';
+import 'package:mukking_flutter_app/features/discovery/domain/map_camera_center.dart';
 import 'package:mukking_flutter_app/features/discovery/presentation/discovery_screen.dart';
 import 'package:mukking_flutter_app/features/discovery/presentation/fullscreen_map_screen.dart';
 import 'package:mukking_flutter_app/features/discovery/presentation/restaurant_bottom_sheet.dart';
@@ -217,6 +218,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(fullscreenMapScreenKey), findsNothing);
     expect(find.byKey(fullscreenMapButtonKey), findsOneWidget);
+  });
+
+  testWidgets('search-this-area button is shared with fullscreen map',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MukkingApp(),
+      ),
+    );
+    await tester.tap(find.text('발견'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(searchThisAreaButtonKey), findsNothing);
+
+    final controller = container.read(searchAreaProvider.notifier);
+    controller.onCameraIdle(
+      const MapCameraIdleEvent(
+        center: MapCameraCenter(latitude: 35.1146, longitude: 129.037),
+        userInitiated: false,
+      ),
+    );
+    controller.onCameraIdle(
+      const MapCameraIdleEvent(
+        center: MapCameraCenter(latitude: 35.12, longitude: 129.045),
+        userInitiated: true,
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(searchThisAreaButtonKey), findsOneWidget);
+
+    await tester.tap(find.byKey(fullscreenMapButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(fullscreenSearchThisAreaButtonKey), findsOneWidget);
+
+    await tester.tap(find.byKey(fullscreenSearchThisAreaButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(fullscreenSearchThisAreaButtonKey), findsNothing);
+    expect(container.read(searchAreaProvider).hasMovedMeaningfully, isFalse);
   });
 
   testWidgets('MY login button is connected and validates form',
@@ -428,6 +469,10 @@ void main() {
 }
 
 class _EmptyRestaurantRepository implements RestaurantRepository {
+  @override
+  Future<List<Restaurant>> discover(RestaurantDiscoverRequest request) async =>
+      const [];
+
   @override
   Future<Restaurant?> getById(String restaurantId) async => null;
 

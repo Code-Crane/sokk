@@ -152,6 +152,11 @@ class _FakeRestaurantRepository implements RestaurantRepository {
       );
 
   @override
+  Future<List<Restaurant>> discover(RestaurantDiscoverRequest request) async {
+    return [_restaurant];
+  }
+
+  @override
   Future<Restaurant?> getById(String restaurantId) async => _restaurant;
 
   @override

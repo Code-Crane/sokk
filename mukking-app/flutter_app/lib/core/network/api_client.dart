@@ -44,6 +44,23 @@ class ApiClient {
     return _asMap(response.data);
   }
 
+  Future<List<dynamic>> postList(
+    String path, {
+    Object? data,
+  }) async {
+    final response = await _request(() => _dio.post<Object?>(path, data: data));
+    final responseData = response.data;
+
+    if (responseData is List) {
+      return responseData;
+    }
+
+    throw const ApiError(
+      kind: ApiErrorKind.unknown,
+      userMessage: '서버 응답 형식을 확인할 수 없어요.',
+    );
+  }
+
   Future<Map<String, dynamic>> patchMap(
     String path, {
     Object? data,

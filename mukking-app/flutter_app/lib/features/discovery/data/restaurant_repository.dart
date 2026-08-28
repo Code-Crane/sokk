@@ -8,6 +8,7 @@ import 'restaurant_api.dart';
 
 abstract class RestaurantRepository {
   Future<List<Restaurant>> list(RestaurantListQuery query);
+  Future<List<Restaurant>> discover(RestaurantDiscoverRequest request);
   Future<Restaurant?> getById(String restaurantId);
   Future<Restaurant> setFavorite(Restaurant restaurant, bool isFavorite);
   Future<List<Restaurant>> listFavorites();
@@ -34,6 +35,12 @@ class ApiRestaurantRepository implements RestaurantRepository {
   @override
   Future<List<Restaurant>> list(RestaurantListQuery query) async {
     final rows = await _api.list(query);
+    return [for (var i = 0; i < rows.length; i++) _toDomain(rows[i], i)];
+  }
+
+  @override
+  Future<List<Restaurant>> discover(RestaurantDiscoverRequest request) async {
+    final rows = await _api.discover(request);
     return [for (var i = 0; i < rows.length; i++) _toDomain(rows[i], i)];
   }
 
@@ -91,6 +98,17 @@ class MockRestaurantDataRepository implements RestaurantRepository {
       rows = rows.where((row) => row.category == query.category).toList();
     }
     return rows.skip(query.offset).take(query.limit).toList();
+  }
+
+  @override
+  Future<List<Restaurant>> discover(RestaurantDiscoverRequest request) {
+    return list(
+      RestaurantListQuery(
+        lat: request.latitude,
+        lng: request.longitude,
+        radiusKm: request.radiusKm,
+      ),
+    );
   }
 
   @override

@@ -16,6 +16,7 @@ import 'package:mukking_flutter_app/features/auth/domain/auth_user.dart';
 import 'package:mukking_flutter_app/features/discovery/data/restaurant_api.dart';
 import 'package:mukking_flutter_app/features/discovery/data/restaurant_repository.dart';
 import 'package:mukking_flutter_app/features/discovery/domain/restaurant.dart';
+import 'package:mukking_flutter_app/features/discovery/domain/map_camera_center.dart';
 import 'package:mukking_flutter_app/features/discovery/domain/restaurant_map_marker.dart';
 import 'package:mukking_flutter_app/features/discovery/domain/user_location.dart';
 import 'package:mukking_flutter_app/features/discovery/presentation/map/kakao_marker_adapter.dart';
@@ -206,6 +207,161 @@ void main() {
     );
   });
 
+  test('restaurant discovery POST serializes center and fixed radius',
+      () async {
+    final adapter = _RestaurantListRecordingAdapter();
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:4000'))
+      ..httpClientAdapter = adapter;
+    final api = RestaurantApi(ApiClient(dio));
+
+    await api.discover(
+      const RestaurantDiscoverRequest(
+        latitude: 35.1146,
+        longitude: 129.037,
+        radiusKm: 2,
+      ),
+    );
+
+    final request = adapter.requests.single;
+    expect(request.method, 'POST');
+    expect(request.path, '/api/restaurants/discover');
+    expect(request.data, {
+      'latitude': 35.1146,
+      'longitude': 129.037,
+      'radiusKm': 2.0,
+    });
+  });
+
+  test('map movement only exposes search and never auto-discovers', () async {
+    final repository = _SearchAreaRestaurantRepository();
+    final container = _container(_FakeLocationService(), repository);
+    addTearDown(container.dispose);
+    await container.read(restaurantFeedProvider.future);
+    final controller = container.read(searchAreaProvider.notifier);
+
+    controller.onCameraIdle(
+      const MapCameraIdleEvent(
+        center: MapCameraCenter(latitude: 35.1146, longitude: 129.037),
+        userInitiated: false,
+      ),
+    );
+    controller.onCameraIdle(
+      const MapCameraIdleEvent(
+        center: MapCameraCenter(latitude: 35.12, longitude: 129.045),
+        userInitiated: true,
+      ),
+    );
+
+    expect(container.read(searchAreaProvider).hasMovedMeaningfully, isTrue);
+    expect(repository.discoverRequests, isEmpty);
+  });
+
+  test('search posts once, refreshes nearby and resets without camera focus',
+      () async {
+    final repository = _SearchAreaRestaurantRepository();
+    final container = _container(_FakeLocationService(), repository);
+    addTearDown(container.dispose);
+    await container.read(restaurantFeedProvider.future);
+    final controller = container.read(searchAreaProvider.notifier);
+    const movedCenter = MapCameraCenter(
+      latitude: 35.12,
+      longitude: 129.045,
+    );
+    controller.onCameraIdle(
+      const MapCameraIdleEvent(
+        center: MapCameraCenter(latitude: 35.1146, longitude: 129.037),
+        userInitiated: false,
+      ),
+    );
+    controller.onCameraIdle(
+      const MapCameraIdleEvent(
+        center: movedCenter,
+        userInitiated: true,
+      ),
+    );
+    final focusBefore = container.read(
+      selectedRestaurantFocusRequestProvider,
+    );
+
+    expect(await controller.searchCurrentArea(), isTrue);
+
+    expect(repository.discoverRequests, hasLength(1));
+    expect(repository.discoverRequests.single.latitude, movedCenter.latitude);
+    expect(repository.discoverRequests.single.longitude, movedCenter.longitude);
+    expect(repository.discoverRequests.single.radiusKm, 2);
+    expect(repository.queries.last.lat, movedCenter.latitude);
+    expect(repository.queries.last.lng, movedCenter.longitude);
+    expect(repository.queries.last.radiusKm, 2);
+    expect(container.read(searchAreaProvider).hasMovedMeaningfully, isFalse);
+    expect(
+      container.read(selectedRestaurantFocusRequestProvider),
+      focusBefore,
+    );
+  });
+
+  test('duplicate search tap is ignored while discovery is in flight',
+      () async {
+    final completer = Completer<void>();
+    final repository = _SearchAreaRestaurantRepository(
+      discoveryGate: completer.future,
+    );
+    final container = _container(_FakeLocationService(), repository);
+    addTearDown(container.dispose);
+    await container.read(restaurantFeedProvider.future);
+    final controller = container.read(searchAreaProvider.notifier);
+    controller.onCameraIdle(
+      const MapCameraIdleEvent(
+        center: MapCameraCenter(latitude: 35.1, longitude: 129.0),
+        userInitiated: false,
+      ),
+    );
+    controller.onCameraIdle(
+      const MapCameraIdleEvent(
+        center: MapCameraCenter(latitude: 35.2, longitude: 129.1),
+        userInitiated: true,
+      ),
+    );
+
+    final first = controller.searchCurrentArea();
+    await Future<void>.delayed(Duration.zero);
+    expect(await controller.searchCurrentArea(), isFalse);
+    expect(repository.discoverRequests, hasLength(1));
+    completer.complete();
+    expect(await first, isTrue);
+  });
+
+  test('failed discovery preserves restaurants and remains retryable',
+      () async {
+    final repository = _SearchAreaRestaurantRepository(failDiscovery: true);
+    final container = _container(_FakeLocationService(), repository);
+    addTearDown(container.dispose);
+    await container.read(restaurantFeedProvider.future);
+    final before = container.read(restaurantsProvider);
+    final controller = container.read(searchAreaProvider.notifier);
+    controller.onCameraIdle(
+      const MapCameraIdleEvent(
+        center: MapCameraCenter(latitude: 35.1, longitude: 129.0),
+        userInitiated: false,
+      ),
+    );
+    controller.onCameraIdle(
+      const MapCameraIdleEvent(
+        center: MapCameraCenter(latitude: 35.2, longitude: 129.1),
+        userInitiated: true,
+      ),
+    );
+
+    expect(await controller.searchCurrentArea(), isFalse);
+
+    final state = container.read(searchAreaProvider);
+    expect(state.status, SearchAreaStatus.error);
+    expect(state.hasMovedMeaningfully, isTrue);
+    final after = container.read(restaurantsProvider);
+    expect(after.map((restaurant) => restaurant.id),
+        before.map((restaurant) => restaurant.id));
+    expect(after.single.isFavorite, before.single.isFavorite);
+  });
+
   test('API provider forwards the nearby query to Dio', () async {
     final adapter = _RestaurantListRecordingAdapter();
     final dio = Dio(BaseOptions(baseUrl: 'http://localhost:4000'))
@@ -288,6 +444,7 @@ void main() {
             focusSelectedRestaurantRequest: 0,
             userLocation: null,
             onMarkerSelected: selectedIds.add,
+            onCameraIdle: (_) {},
           ),
         ),
       ),
@@ -501,6 +658,11 @@ class _RecordingRestaurantRepository implements RestaurantRepository {
   final List<RestaurantListQuery> queries = [];
 
   @override
+  Future<List<Restaurant>> discover(RestaurantDiscoverRequest request) async {
+    return [_restaurant(id: 'restaurant-discovered')];
+  }
+
+  @override
   Future<Restaurant?> getById(String restaurantId) async => null;
 
   @override
@@ -523,11 +685,56 @@ class _RecordingRestaurantRepository implements RestaurantRepository {
 
 class _ThrowingRestaurantRepository implements RestaurantRepository {
   @override
+  Future<List<Restaurant>> discover(RestaurantDiscoverRequest request) {
+    return Future<List<Restaurant>>.error(StateError('discovery failed'));
+  }
+
+  @override
   Future<Restaurant?> getById(String restaurantId) async => null;
 
   @override
   Future<List<Restaurant>> list(RestaurantListQuery query) {
     return Future<List<Restaurant>>.error(StateError('restaurant API failed'));
+  }
+
+  @override
+  Future<List<Restaurant>> listFavorites() async => const [];
+
+  @override
+  Future<Restaurant> setFavorite(
+    Restaurant restaurant,
+    bool isFavorite,
+  ) async {
+    return restaurant.copyWith(isFavorite: isFavorite);
+  }
+}
+
+class _SearchAreaRestaurantRepository implements RestaurantRepository {
+  _SearchAreaRestaurantRepository({
+    this.failDiscovery = false,
+    this.discoveryGate,
+  });
+
+  final bool failDiscovery;
+  final Future<void>? discoveryGate;
+  final List<RestaurantListQuery> queries = [];
+  final List<RestaurantDiscoverRequest> discoverRequests = [];
+
+  @override
+  Future<List<Restaurant>> discover(RestaurantDiscoverRequest request) async {
+    discoverRequests.add(request);
+    if (discoveryGate != null) await discoveryGate;
+    if (failDiscovery) throw StateError('discovery failed');
+    return [_restaurant(id: 'restaurant-discovered')];
+  }
+
+  @override
+  Future<Restaurant?> getById(String restaurantId) async => null;
+
+  @override
+  Future<List<Restaurant>> list(RestaurantListQuery query) async {
+    queries.add(query);
+    return [_restaurant(id: 'restaurant-existing')];
   }
 
   @override

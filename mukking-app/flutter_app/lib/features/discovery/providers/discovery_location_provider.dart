@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/geolocator_location_service.dart';
 import '../data/restaurant_api.dart';
+import '../domain/map_camera_center.dart';
 import '../domain/user_location.dart';
 import 'discovery_provider.dart';
 
@@ -109,6 +110,12 @@ class DiscoveryLocationController
         status: DiscoveryLocationStatus.loadingRestaurants,
         location: location,
       );
+      _ref.read(searchAreaProvider.notifier).resetForExternalCenter(
+            MapCameraCenter(
+              latitude: location.latitude,
+              longitude: location.longitude,
+            ),
+          );
       _ref.read(restaurantListQueryProvider.notifier).state =
           RestaurantListQuery(
         lat: location.latitude,
@@ -147,6 +154,7 @@ class DiscoveryLocationController
   }
 
   void useGeneralRestaurantList() {
+    _ref.read(searchAreaProvider.notifier).reset();
     _ref.read(restaurantListQueryProvider.notifier).state =
         const RestaurantListQuery(limit: 50, offset: 0);
     state = const DiscoveryLocationState();

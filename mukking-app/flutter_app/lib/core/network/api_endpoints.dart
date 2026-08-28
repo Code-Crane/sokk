@@ -10,6 +10,7 @@ class ApiEndpoints {
   static const matchingPosts = '/api/matching/posts';
 
   static const restaurants = '/api/restaurants';
+  static const restaurantDiscover = '/api/restaurants/discover';
   static const favoriteRestaurants = '/api/restaurants/favorites/me';
 
   static String restaurant(String restaurantId) {

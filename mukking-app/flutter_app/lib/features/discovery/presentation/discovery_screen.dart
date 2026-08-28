@@ -16,9 +16,11 @@ import '../providers/discovery_location_provider.dart';
 import '../providers/discovery_provider.dart';
 import 'map/restaurant_map_view.dart';
 import 'restaurant_bottom_sheet.dart';
+import 'search_this_area_button.dart';
 
 const fullscreenMapButtonKey = Key('open-fullscreen-map-button');
 const nearbyRestaurantListKey = Key('nearby-restaurant-list');
+const searchThisAreaButtonKey = Key('search-this-area-button');
 
 class DiscoveryScreen extends ConsumerWidget {
   const DiscoveryScreen({super.key});
@@ -201,6 +203,17 @@ class _DiscoveryMapSection extends ConsumerWidget {
             ref,
             restaurantId,
             focusCamera: false,
+          ),
+          onCameraIdle: ref.read(searchAreaProvider.notifier).onCameraIdle,
+        ),
+        const Positioned(
+          top: 12,
+          left: 60,
+          right: 60,
+          child: Center(
+            child: SearchThisAreaButton(
+              buttonKey: searchThisAreaButtonKey,
+            ),
           ),
         ),
         Positioned(

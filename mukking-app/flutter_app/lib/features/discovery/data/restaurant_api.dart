@@ -28,6 +28,45 @@ class RestaurantListQuery {
       'offset': offset,
     };
   }
+
+  @override
+  bool operator ==(Object other) {
+    return other is RestaurantListQuery &&
+        other.lat == lat &&
+        other.lng == lng &&
+        other.radiusKm == radiusKm &&
+        other.category == category &&
+        other.limit == limit &&
+        other.offset == offset;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        lat,
+        lng,
+        radiusKm,
+        category,
+        limit,
+        offset,
+      );
+}
+
+class RestaurantDiscoverRequest {
+  const RestaurantDiscoverRequest({
+    required this.latitude,
+    required this.longitude,
+    required this.radiusKm,
+  });
+
+  final double latitude;
+  final double longitude;
+  final double radiusKm;
+
+  Map<String, dynamic> toJson() => {
+        'latitude': latitude,
+        'longitude': longitude,
+        'radiusKm': radiusKm,
+      };
 }
 
 class RestaurantApi {
@@ -39,6 +78,16 @@ class RestaurantApi {
     final rows = await _client.getList(
       ApiEndpoints.restaurants,
       queryParameters: query.toQueryParameters(),
+    );
+    return rows.whereType<Map>().map(RestaurantDto.fromJson).toList();
+  }
+
+  Future<List<RestaurantDto>> discover(
+    RestaurantDiscoverRequest request,
+  ) async {
+    final rows = await _client.postList(
+      ApiEndpoints.restaurantDiscover,
+      data: request.toJson(),
     );
     return rows.whereType<Map>().map(RestaurantDto.fromJson).toList();
   }
