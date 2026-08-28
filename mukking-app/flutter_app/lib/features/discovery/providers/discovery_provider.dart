@@ -313,6 +313,37 @@ final restaurantByIdProvider = Provider.family<Restaurant?, String>((ref, id) {
   return null;
 });
 
+final restaurantDetailSourceProvider =
+    FutureProvider.family<Restaurant?, String>((ref, restaurantId) async {
+  final cached = ref.watch(restaurantByIdProvider(restaurantId));
+  if (cached != null) return cached;
+
+  final config = ref.watch(appConfigProvider);
+  if (config.usesApiData) {
+    final authState = ref.watch(restaurantAuthStateProvider);
+    if (authState.isLoading) return null;
+    if (!authState.isAuthenticated) {
+      throw const ApiError(
+        kind: ApiErrorKind.unauthorized,
+        statusCode: 401,
+        userMessage: '로그인이 필요해요.',
+      );
+    }
+  }
+
+  return ref.watch(restaurantRepositoryProvider).getById(restaurantId);
+});
+
+final restaurantDetailProvider =
+    Provider.family<AsyncValue<Restaurant?>, String>((ref, restaurantId) {
+  final favoriteOverride = ref.watch(favoriteOverridesProvider)[restaurantId];
+  return ref.watch(restaurantDetailSourceProvider(restaurantId)).whenData(
+        (restaurant) => restaurant?.copyWith(
+          isFavorite: favoriteOverride ?? restaurant.isFavorite,
+        ),
+      );
+});
+
 class FavoriteRestaurantsController extends StateNotifier<Map<String, bool>> {
   FavoriteRestaurantsController({
     required Ref ref,

@@ -7,6 +7,7 @@ final externalUrlLauncherProvider = Provider<ExternalUrlLauncher>((ref) {
   return (uri) => launchUrl(
         uri,
         mode: LaunchMode.externalApplication,
-        webOnlyWindowName: '_blank',
+        webOnlyWindowName:
+            uri.scheme == 'http' || uri.scheme == 'https' ? '_blank' : null,
       );
 });

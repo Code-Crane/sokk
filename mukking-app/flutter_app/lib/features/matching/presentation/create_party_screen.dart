@@ -61,7 +61,7 @@ class _CreatePartyScreenState extends ConsumerState<CreatePartyScreen> {
     final tokens = context.tokens;
     final restaurant = widget.restaurantId == null
         ? null
-        : ref.watch(restaurantByIdProvider(widget.restaurantId!));
+        : ref.watch(restaurantDetailProvider(widget.restaurantId!)).valueOrNull;
     final createState = ref.watch(createPartyControllerProvider);
 
     _applyRestaurantPrefill(restaurant);

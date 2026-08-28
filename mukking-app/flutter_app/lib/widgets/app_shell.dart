@@ -93,7 +93,8 @@ class AppShell extends ConsumerWidget {
   }
 
   int _selectedIndex(String location) {
-    if (location.startsWith(AppRoutes.discovery)) {
+    if (location.startsWith(AppRoutes.discovery) ||
+        location.startsWith(AppRoutes.restaurants)) {
       return 1;
     }
     if (location.startsWith(AppRoutes.createParty)) {

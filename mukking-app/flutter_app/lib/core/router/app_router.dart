@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/chat/presentation/chat_screen.dart';
 import '../../features/discovery/presentation/discovery_screen.dart';
 import '../../features/discovery/presentation/fullscreen_map_screen.dart';
+import '../../features/discovery/presentation/restaurant_detail_screen.dart';
 import '../../features/home/presentation/home_screen.dart';
 import '../../features/matching/presentation/create_party_screen.dart';
 import '../../features/matching/presentation/party_detail_screen.dart';
@@ -78,6 +79,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               final partyId = state.pathParameters['partyId'] ?? '';
               return MaterialPage(
                 child: PartyDetailScreen(partyId: partyId),
+              );
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.restaurantDetail,
+            pageBuilder: (context, state) {
+              final restaurantId = state.pathParameters['restaurantId'] ?? '';
+              return MaterialPage(
+                child: RestaurantDetailScreen(restaurantId: restaurantId),
               );
             },
           ),

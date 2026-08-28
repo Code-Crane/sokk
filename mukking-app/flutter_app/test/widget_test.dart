@@ -89,6 +89,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('찜 취소'), findsOneWidget);
     expect(container.read(selectedRestaurantFocusRequestProvider), 0);
+
+    await tester.tap(find.byKey(restaurantViewDetailsButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('restaurant-detail-page')), findsOneWidget);
   });
 
   testWidgets('nearby restaurant card selects restaurant and opens details',

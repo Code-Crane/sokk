@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:kakao_maps_flutter/kakao_maps_flutter.dart';
 import 'package:mukking_flutter_app/core/config/app_config.dart';
 import 'package:mukking_flutter_app/core/network/api_client.dart';
 import 'package:mukking_flutter_app/core/network/dio_provider.dart';
@@ -20,6 +21,7 @@ import 'package:mukking_flutter_app/features/discovery/domain/map_camera_center.
 import 'package:mukking_flutter_app/features/discovery/domain/restaurant_map_marker.dart';
 import 'package:mukking_flutter_app/features/discovery/domain/user_location.dart';
 import 'package:mukking_flutter_app/features/discovery/presentation/map/kakao_marker_adapter.dart';
+import 'package:mukking_flutter_app/features/discovery/presentation/map/kakao_cluster_policy.dart';
 import 'package:mukking_flutter_app/features/discovery/presentation/map/restaurant_camera_policy.dart';
 import 'package:mukking_flutter_app/features/discovery/presentation/map/restaurant_map_view.dart';
 import 'package:mukking_flutter_app/features/discovery/providers/discovery_location_provider.dart';
@@ -491,6 +493,145 @@ void main() {
       isFalse,
     );
     expect(isRestaurantMarkerTap('favorite', markers), isTrue);
+  });
+
+  test('cluster input contains restaurants only and excludes current location',
+      () {
+    final markers = buildRestaurantMapMarkers([
+      _restaurant(id: 'restaurant-1'),
+      _restaurant(id: 'restaurant-2'),
+    ]);
+
+    final restaurantOptions = buildKakaoRestaurantMarkerOptions(
+      markers: markers,
+      selectedRestaurantId: null,
+    );
+    final locationOption = buildKakaoCurrentLocationMarkerOption(
+      const UserLocation(latitude: 35.1, longitude: 129.0),
+    );
+
+    expect(restaurantOptions, hasLength(2));
+    expect(
+      restaurantOptions.any(
+        (option) => option.id == kakaoCurrentLocationMarkerId,
+      ),
+      isFalse,
+    );
+    expect(locationOption?.id, kakaoCurrentLocationMarkerId);
+  });
+
+  test('cluster tap moves camera once and never selects a restaurant',
+      () async {
+    final bounds = LatLngBounds(
+      southwest: const LatLng(latitude: 35.1, longitude: 129.0),
+      northeast: const LatLng(latitude: 35.2, longitude: 129.1),
+    );
+    final event = ClusterClickEvent(
+      clustererId: kakaoRestaurantClusterLayerId,
+      position: const LatLng(latitude: 35.15, longitude: 129.05),
+      size: 12,
+      bounds: bounds,
+    );
+    final cameraUpdates = <CameraUpdate>[];
+
+    final handled = await handleRestaurantClusterTap(
+      event,
+      moveCamera: (update) async => cameraUpdates.add(update),
+      readZoomLevel: () async => 14,
+    );
+
+    expect(handled, isTrue);
+    expect(event.size, 12);
+    expect(cameraUpdates, hasLength(1));
+    expect(cameraUpdates.single.position, event.position);
+    expect(cameraUpdates.single.zoomLevel, 15);
+    expect(cameraUpdates.single.rotationAngle, -1);
+    expect(cameraUpdates.single.tiltAngle, -1);
+    expect(
+      isRestaurantMarkerTap(kakaoRestaurantClusterLayerId, const []),
+      isFalse,
+    );
+  });
+
+  test('cluster visual policy uses three readable count tiers', () {
+    final styles = kakaoWebClusterStyles(const Color(0xFF5B3DF5));
+
+    expect(kakaoRestaurantMinClusterSize, 3);
+    expect(kakaoRestaurantClusterGridSize, 56);
+    expect(kakaoRestaurantMinClusterLevel, 4);
+    expect(kakaoRestaurantClusterCalculator, [5, 10]);
+    expect(kakaoRestaurantClusterSizes, [36, 42, 48]);
+    expect(
+      styles.map((style) => style['width']),
+      ['36px', '42px', '48px'],
+    );
+    expect(
+      styles.map((style) => style['border-radius']),
+      ['18px', '21px', '24px'],
+    );
+    expect(styles.every((style) => style['text-align'] == 'center'), isTrue);
+  });
+
+  test('unrelated cluster event performs no camera work', () async {
+    var zoomReads = 0;
+    var cameraMoves = 0;
+    final handled = await handleRestaurantClusterTap(
+      ClusterClickEvent(
+        clustererId: 'another-layer',
+        position: const LatLng(latitude: 35.15, longitude: 129.05),
+        size: 5,
+        bounds: LatLngBounds(
+          southwest: const LatLng(latitude: 35.1, longitude: 129.0),
+          northeast: const LatLng(latitude: 35.2, longitude: 129.1),
+        ),
+      ),
+      readZoomLevel: () async {
+        zoomReads += 1;
+        return 14;
+      },
+      moveCamera: (_) async => cameraMoves += 1,
+    );
+
+    expect(handled, isFalse);
+    expect(zoomReads, 0);
+    expect(cameraMoves, 0);
+  });
+
+  test('cluster marker sync is incremental for 50 restaurants', () {
+    final markers = buildRestaurantMapMarkers([
+      for (var index = 0; index < 50; index += 1)
+        _restaurant(id: 'restaurant-$index').copyWith(
+          latitude: 35.1 + index * .0001,
+          longitude: 129.0 + index * .0001,
+        ),
+    ]);
+    final initialOptions = buildKakaoRestaurantMarkerOptions(
+      markers: markers,
+      selectedRestaurantId: null,
+    );
+    final initialPlan = buildKakaoMarkerSyncPlan(
+      previous: const {},
+      next: initialOptions,
+    );
+    final rendered = {for (final option in initialOptions) option.id: option};
+    final noChangePlan = buildKakaoMarkerSyncPlan(
+      previous: rendered,
+      next: initialOptions,
+    );
+    final selectedOptions = buildKakaoRestaurantMarkerOptions(
+      markers: markers,
+      selectedRestaurantId: 'restaurant-25',
+    );
+    final selectionPlan = buildKakaoMarkerSyncPlan(
+      previous: rendered,
+      next: selectedOptions,
+    );
+
+    expect(initialPlan.optionsToAdd, hasLength(50));
+    expect(initialPlan.removedIds, isEmpty);
+    expect(noChangePlan.hasChanges, isFalse);
+    expect(selectionPlan.removedIds, ['restaurant-25']);
+    expect(selectionPlan.optionsToAdd.single.id, 'restaurant-25');
   });
 
   test('restaurant camera update preserves zoom, rotation and tilt', () {

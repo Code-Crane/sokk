@@ -19,6 +19,20 @@ List<MarkerOption> buildKakaoMarkerOptions({
   required UserLocation? userLocation,
 }) {
   return [
+    ...buildKakaoRestaurantMarkerOptions(
+      markers: markers,
+      selectedRestaurantId: selectedRestaurantId,
+    ),
+    if (buildKakaoCurrentLocationMarkerOption(userLocation) case final option?)
+      option,
+  ];
+}
+
+List<MarkerOption> buildKakaoRestaurantMarkerOptions({
+  required List<RestaurantMapMarker> markers,
+  required String? selectedRestaurantId,
+}) {
+  return [
     for (final marker in markers)
       MarkerOption(
         id: marker.id,
@@ -32,17 +46,22 @@ List<MarkerOption> buildKakaoMarkerOptions({
           selected: marker.id == selectedRestaurantId,
         ),
       ),
-    if (userLocation case final location?)
-      MarkerOption(
-        id: kakaoCurrentLocationMarkerId,
-        latLng: LatLng(
-          latitude: location.latitude,
-          longitude: location.longitude,
-        ),
-        rank: 10000,
-        text: '내 위치',
-      ),
   ];
+}
+
+MarkerOption? buildKakaoCurrentLocationMarkerOption(
+  UserLocation? userLocation,
+) {
+  if (userLocation == null) return null;
+  return MarkerOption(
+    id: kakaoCurrentLocationMarkerId,
+    latLng: LatLng(
+      latitude: userLocation.latitude,
+      longitude: userLocation.longitude,
+    ),
+    rank: 10000,
+    text: '내 위치',
+  );
 }
 
 String kakaoMarkerLabel(

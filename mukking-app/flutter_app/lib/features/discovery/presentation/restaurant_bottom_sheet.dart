@@ -13,6 +13,7 @@ import '../providers/discovery_provider.dart';
 const restaurantDetailsSheetKey = Key('restaurant-details-sheet');
 const restaurantPhoneKey = Key('restaurant-phone');
 const restaurantPlaceUrlButtonKey = Key('restaurant-place-url-button');
+const restaurantViewDetailsButtonKey = Key('restaurant-view-details-button');
 
 Future<void> showRestaurantDetailsSheet(
   BuildContext context, {
@@ -42,7 +43,14 @@ class _RestaurantDetailsSheet extends ConsumerWidget {
     return SingleChildScrollView(
       key: restaurantDetailsSheetKey,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-      child: RestaurantBottomSheet(restaurant: restaurant),
+      child: RestaurantBottomSheet(
+        restaurant: restaurant,
+        onViewDetails: () {
+          final router = GoRouter.of(context);
+          Navigator.of(context).pop();
+          router.push(AppRoutes.restaurantDetailPath(restaurant.id));
+        },
+      ),
     );
   }
 }
@@ -50,10 +58,12 @@ class _RestaurantDetailsSheet extends ConsumerWidget {
 class RestaurantBottomSheet extends ConsumerWidget {
   const RestaurantBottomSheet({
     required this.restaurant,
+    this.onViewDetails,
     super.key,
   });
 
   final Restaurant restaurant;
+  final VoidCallback? onViewDetails;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -178,6 +188,16 @@ class RestaurantBottomSheet extends ConsumerWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
+              _ActionChipButton(
+                key: restaurantViewDetailsButtonKey,
+                icon: Icons.info_outline_rounded,
+                label: '식당 자세히 보기',
+                color: tokens.primary,
+                onTap: onViewDetails ??
+                    () => context.push(
+                          AppRoutes.restaurantDetailPath(restaurant.id),
+                        ),
+              ),
               if (placeUri != null)
                 _ActionChipButton(
                   key: restaurantPlaceUrlButtonKey,

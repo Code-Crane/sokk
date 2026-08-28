@@ -8,6 +8,7 @@ import '../../domain/restaurant.dart';
 import '../../domain/map_camera_center.dart';
 import '../../domain/restaurant_map_marker.dart';
 import '../../domain/user_location.dart';
+import 'kakao_cluster_policy.dart';
 import 'kakao_marker_adapter.dart';
 import 'restaurant_camera_policy.dart';
 import 'restaurant_map_fallback.dart';
@@ -52,9 +53,11 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
   KakaoMapController? _controller;
   RestaurantCameraCoordinator? _cameraCoordinator;
   StreamSubscription<LabelClickEvent>? _labelClickSubscription;
+  StreamSubscription<ClusterClickEvent>? _clusterClickSubscription;
   StreamSubscription<CameraMoveEndEvent>? _cameraMoveEndSubscription;
   Timer? _programmaticMoveTimer;
-  Map<String, MarkerOption> _renderedMarkers = const {};
+  Map<String, MarkerOption> _renderedRestaurantMarkers = const {};
+  Map<String, MarkerOption> _renderedLocationMarkers = const {};
   bool _markerSyncRunning = false;
   bool _markerSyncPending = false;
   bool _didFitInitialContent = false;
@@ -89,6 +92,7 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
   void dispose() {
     _cameraCoordinator?.dispose();
     _labelClickSubscription?.cancel();
+    _clusterClickSubscription?.cancel();
     _cameraMoveEndSubscription?.cancel();
     _programmaticMoveTimer?.cancel();
     _controller?.dispose();
@@ -168,6 +172,17 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
         widget.onMarkerSelected(event.labelId);
       }
     });
+    _clusterClickSubscription = controller.onClusterClickedStream.listen(
+      (event) {
+        unawaited(
+          handleRestaurantClusterTap(
+            event,
+            moveCamera: _moveCameraProgrammatically,
+            readZoomLevel: controller.getZoomLevel,
+          ),
+        );
+      },
+    );
     _cameraMoveEndSubscription = controller.onCameraMoveEndStream.listen(
       _onCameraMoveEnd,
     );
@@ -189,6 +204,7 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
           clickable: true,
         );
       }
+      await _createRestaurantMarkerLayer(controller);
       await _syncMarkersOnce();
       await _fitInitialContent();
     } catch (_) {
@@ -218,41 +234,85 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
     if (controller == null) return;
 
     try {
-      final options = buildKakaoMarkerOptions(
+      final restaurantOptions = buildKakaoRestaurantMarkerOptions(
         markers: widget.markers,
         selectedRestaurantId: widget.selectedRestaurantId,
-        userLocation: widget.userLocation,
       );
-      final nextMarkers = {for (final option in options) option.id: option};
-      final removedIds = _renderedMarkers.keys
-          .where((id) => !nextMarkers.containsKey(id))
-          .toSet();
-      final changedIds = nextMarkers.keys.where((id) {
-        final previous = _renderedMarkers[id];
-        return previous != null &&
-            !_sameMarkerOption(previous, nextMarkers[id]!);
-      }).toSet();
-      final idsToRemove = {...removedIds, ...changedIds};
-
-      if (idsToRemove.isNotEmpty) {
-        await controller.removeMarkers(ids: idsToRemove.toList());
+      final restaurantPlan = buildKakaoMarkerSyncPlan(
+        previous: _renderedRestaurantMarkers,
+        next: restaurantOptions,
+      );
+      if (restaurantPlan.removedIds.isNotEmpty) {
+        await controller.removeLodMarkers(
+          layerId: kakaoRestaurantClusterLayerId,
+          ids: restaurantPlan.removedIds,
+        );
       }
-
-      final optionsToAdd = options
-          .where(
-            (option) =>
-                !_renderedMarkers.containsKey(option.id) ||
-                changedIds.contains(option.id),
-          )
-          .toList();
-
-      if (optionsToAdd.isNotEmpty) {
-        await controller.addMarkers(markerOptions: optionsToAdd);
+      if (restaurantPlan.optionsToAdd.isNotEmpty) {
+        await controller.addLodMarkers(
+          options: restaurantPlan.optionsToAdd,
+          layerId: kakaoRestaurantClusterLayerId,
+        );
       }
-      _renderedMarkers = nextMarkers;
+      _renderedRestaurantMarkers = {
+        for (final option in restaurantOptions) option.id: option,
+      };
+
+      final locationOption = buildKakaoCurrentLocationMarkerOption(
+        widget.userLocation,
+      );
+      final locationOptions = [if (locationOption != null) locationOption];
+      final locationPlan = buildKakaoMarkerSyncPlan(
+        previous: _renderedLocationMarkers,
+        next: locationOptions,
+      );
+      if (locationPlan.removedIds.isNotEmpty) {
+        await controller.removeMarkers(ids: locationPlan.removedIds);
+      }
+      if (locationPlan.optionsToAdd.isNotEmpty) {
+        await controller.addMarkers(
+          markerOptions: locationPlan.optionsToAdd,
+        );
+      }
+      _renderedLocationMarkers = {
+        for (final option in locationOptions) option.id: option,
+      };
     } catch (_) {
       if (mounted) setState(() => _mapUnavailable = true);
     }
+  }
+
+  Future<void> _createRestaurantMarkerLayer(
+    KakaoMapController controller,
+  ) async {
+    if (kIsWeb) {
+      await controller.addWebMarkerClusterer(
+        clustererId: kakaoRestaurantClusterLayerId,
+        gridSize: kakaoRestaurantClusterGridSize,
+        averageCenter: true,
+        minLevel: kakaoRestaurantMinClusterLevel,
+        minClusterSize: kakaoRestaurantMinClusterSize,
+        disableClickZoom: true,
+        clickable: true,
+        calculator: kakaoRestaurantClusterCalculator,
+        styles: kakaoWebClusterStyles(
+          Theme.of(context).colorScheme.primary,
+        ),
+      );
+      return;
+    }
+
+    await controller.addLodMarkerLayer(
+      options: const LodMarkerLayerOptions(
+        layerId: kakaoRestaurantClusterLayerId,
+        zOrder: 0,
+        radius: kakaoRestaurantClusterRadius,
+      ),
+    );
+    await controller.setLodMarkerLayerClickable(
+      layerId: kakaoRestaurantClusterLayerId,
+      clickable: true,
+    );
   }
 
   Future<void> _fitInitialContent() async {
@@ -395,14 +455,5 @@ class _KakaoRestaurantMapState extends State<KakaoRestaurantMap> {
       }
     }
     return true;
-  }
-
-  bool _sameMarkerOption(MarkerOption first, MarkerOption second) {
-    return first.id == second.id &&
-        first.latLng.latitude == second.latLng.latitude &&
-        first.latLng.longitude == second.latLng.longitude &&
-        first.styleId == second.styleId &&
-        first.rank == second.rank &&
-        first.text == second.text;
   }
 }
