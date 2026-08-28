@@ -126,9 +126,14 @@ class RestaurantDto {
     required this.isFavorite,
     required this.activePartyCount,
     required this.distanceMeters,
+    this.phone,
+    this.roadAddress,
+    this.placeUrl,
   });
 
   factory RestaurantDto.fromJson(Map<dynamic, dynamic> json) {
+    final metadata = json['metadata'];
+    final metadataMap = metadata is Map ? metadata : const <dynamic, dynamic>{};
     return RestaurantDto(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '식당 이름 없음',
@@ -140,6 +145,10 @@ class RestaurantDto {
       isFavorite: json['isFavorite'] as bool? ?? false,
       activePartyCount: (json['activePartyCount'] as num?)?.toInt() ?? 0,
       distanceMeters: (json['distanceMeters'] as num?)?.round(),
+      phone: _optionalText(json['phone']),
+      roadAddress: _optionalText(json['roadAddress']),
+      placeUrl: _optionalText(metadataMap['placeUrl']) ??
+          _optionalText(json['placeUrl']),
     );
   }
 
@@ -153,4 +162,13 @@ class RestaurantDto {
   final bool isFavorite;
   final int activePartyCount;
   final int? distanceMeters;
+  final String? phone;
+  final String? roadAddress;
+  final String? placeUrl;
+
+  static String? _optionalText(dynamic value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
 }

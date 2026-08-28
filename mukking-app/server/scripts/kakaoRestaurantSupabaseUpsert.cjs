@@ -70,13 +70,31 @@ async function main() {
     if (favorite.error) throw favorite.error;
 
     const [updated] = await supabaseRestaurantRepository.upsertMany([
-      { ...baseInput, name: "[TEST] Updated Kakao upsert fixture" },
-      { ...baseInput, name: "[TEST] Updated Kakao upsert fixture" }
+      {
+        ...baseInput,
+        name: "[TEST] Updated Kakao upsert fixture",
+        phone: "051-111-2222",
+        metadata: {
+          ...baseInput.metadata,
+          placeUrl: "https://place.map.kakao.com/updated"
+        }
+      },
+      {
+        ...baseInput,
+        name: "[TEST] Updated Kakao upsert fixture",
+        phone: "051-111-2222",
+        metadata: {
+          ...baseInput.metadata,
+          placeUrl: "https://place.map.kakao.com/updated"
+        }
+      }
     ]);
     record(
       "repeat upsert preserves primary key and updates fields",
       updated.id === restaurantId &&
-        updated.name === "[TEST] Updated Kakao upsert fixture"
+        updated.name === "[TEST] Updated Kakao upsert fixture" &&
+        updated.phone === "051-111-2222" &&
+        updated.metadata.placeUrl === "https://place.map.kakao.com/updated"
     );
 
     const rows = await service

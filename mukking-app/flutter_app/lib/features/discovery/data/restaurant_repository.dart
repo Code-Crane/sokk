@@ -82,6 +82,9 @@ class ApiRestaurantRepository implements RestaurantRepository {
       imageLabel: dto.name,
       markerDx: 0.18 + (index % 3) * 0.26,
       markerDy: 0.2 + (index % 4) * 0.16,
+      phone: dto.phone,
+      roadAddress: dto.roadAddress,
+      placeUrl: dto.placeUrl,
     );
   }
 }

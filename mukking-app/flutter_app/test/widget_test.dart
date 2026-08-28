@@ -3,11 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mukking_flutter_app/core/config/app_config.dart';
 import 'package:mukking_flutter_app/core/network/api_error.dart';
+import 'package:mukking_flutter_app/core/platform/external_url_launcher.dart';
+import 'package:mukking_flutter_app/core/theme/app_theme.dart';
+import 'package:mukking_flutter_app/core/theme/theme_tokens.dart';
 import 'package:mukking_flutter_app/features/auth/data/auth_repository.dart';
 import 'package:mukking_flutter_app/features/chat/providers/chat_provider.dart';
 import 'package:mukking_flutter_app/features/discovery/providers/discovery_provider.dart';
 import 'package:mukking_flutter_app/features/discovery/data/restaurant_api.dart';
 import 'package:mukking_flutter_app/features/discovery/data/restaurant_repository.dart';
+import 'package:mukking_flutter_app/features/discovery/data/mock_restaurant_repository.dart';
 import 'package:mukking_flutter_app/features/discovery/domain/restaurant.dart';
 import 'package:mukking_flutter_app/features/discovery/domain/map_camera_center.dart';
 import 'package:mukking_flutter_app/features/discovery/presentation/discovery_screen.dart';
@@ -136,6 +140,164 @@ void main() {
     await tester.tap(card);
     await tester.pumpAndSettle();
     expect(container.read(selectedRestaurantFocusRequestProvider), 2);
+  });
+
+  testWidgets('restaurant card stays compact while details expose actions',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          mockRestaurantRepositoryProvider.overrideWithValue(
+            const _DetailedMockRestaurantRepository(),
+          ),
+          externalUrlLauncherProvider.overrideWithValue((_) async => true),
+        ],
+        child: const MukkingApp(),
+      ),
+    );
+    await tester.tap(find.text('발견'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    final card = find.byKey(
+      const ValueKey('nearby-restaurant-card-restaurant-details-test'),
+    );
+    expect(card, findsOneWidget);
+    expect(
+      find.descendant(of: card, matching: find.text('051-123-4567')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: card,
+        matching: find.byKey(restaurantPlaceUrlButtonKey),
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(card);
+    await tester.pumpAndSettle();
+
+    final details = find.byKey(restaurantDetailsSheetKey);
+    expect(details, findsOneWidget);
+    expect(
+      find.descendant(of: details, matching: find.text('051-123-4567')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: details,
+        matching: find.byKey(restaurantPlaceUrlButtonKey),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: details, matching: find.text('파티 보기')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: details,
+        matching: find.text('이 식당에서 파티 만들기'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: details, matching: find.text('가고 싶어요')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('restaurant details show real phone and safe Kakao place link',
+      (tester) async {
+    Uri? launchedUri;
+    final restaurant = _restaurantWithDetails();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          externalUrlLauncherProvider.overrideWithValue((uri) async {
+            launchedUri = uri;
+            return true;
+          }),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.build(MukkingThemeId.violet),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: RestaurantBottomSheet(restaurant: restaurant),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(restaurantPhoneKey), findsOneWidget);
+    expect(find.text('051-123-4567'), findsOneWidget);
+    expect(find.text('부산 동구 중앙대로 1'), findsOneWidget);
+    expect(find.byKey(restaurantPlaceUrlButtonKey), findsOneWidget);
+
+    await tester.tap(find.byKey(restaurantPlaceUrlButtonKey));
+    await tester.pumpAndSettle();
+    expect(launchedUri, Uri.parse('https://place.map.kakao.com/123'));
+  });
+
+  testWidgets(
+      'restaurant details hide missing fields and handle launch failure',
+      (tester) async {
+    var launchAttempts = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          externalUrlLauncherProvider.overrideWithValue((_) async {
+            launchAttempts += 1;
+            return false;
+          }),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.build(MukkingThemeId.violet),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: RestaurantBottomSheet(
+                restaurant: _restaurantWithDetails(phone: ' '),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(restaurantPhoneKey), findsNothing);
+    await tester.tap(find.byKey(restaurantPlaceUrlButtonKey));
+    await tester.pumpAndSettle();
+    expect(launchAttempts, 1);
+    expect(find.text('카카오맵 상세 페이지를 열지 못했어요.'), findsOneWidget);
+  });
+
+  testWidgets('invalid place URL does not expose an external action',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.build(MukkingThemeId.violet),
+          home: Scaffold(
+            body: RestaurantBottomSheet(
+              restaurant: _restaurantWithDetails(
+                phone: null,
+                placeUrl: 'javascript:alert(1)',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(restaurantPhoneKey), findsNothing);
+    expect(find.byKey(restaurantPlaceUrlButtonKey), findsNothing);
   });
 
   testWidgets('empty nearby response explains the five kilometer context',
@@ -380,11 +542,35 @@ void main() {
       'distanceMeters': 845.4,
       'activePartyCount': 2,
       'isFavorite': true,
+      'phone': ' 02-123-4567 ',
+      'roadAddress': '서울시 성동구 도로명 1',
+      'metadata': {'placeUrl': 'https://place.map.kakao.com/restaurant-api-1'},
     });
 
     expect(restaurant.distanceMeters, 845);
     expect(restaurant.activePartyCount, 2);
     expect(restaurant.isFavorite, isTrue);
+    expect(restaurant.phone, '02-123-4567');
+    expect(restaurant.roadAddress, '서울시 성동구 도로명 1');
+    expect(
+      restaurant.placeUrl,
+      'https://place.map.kakao.com/restaurant-api-1',
+    );
+  });
+
+  test('legacy restaurant response remains backward compatible', () {
+    final restaurant = RestaurantDto.fromJson({
+      'id': 'legacy-restaurant',
+      'name': '기존 식당',
+      'address': '기존 주소',
+      'category': '한식',
+    });
+
+    expect(restaurant.phone, isNull);
+    expect(restaurant.roadAddress, isNull);
+    expect(restaurant.placeUrl, isNull);
+    expect(restaurant.isFavorite, isFalse);
+    expect(restaurant.activePartyCount, 0);
   });
 
   test('matching and notification contracts retain relationship ids', () {
@@ -468,6 +654,30 @@ void main() {
   });
 }
 
+Restaurant _restaurantWithDetails({
+  String? phone = '051-123-4567',
+  String? placeUrl = 'https://place.map.kakao.com/123',
+}) {
+  return Restaurant(
+    id: 'restaurant-details-test',
+    name: '상세 테스트 식당',
+    category: '한식',
+    address: '부산 동구 지번 1',
+    roadAddress: '부산 동구 중앙대로 1',
+    phone: phone,
+    placeUrl: placeUrl,
+    latitude: 35.11,
+    longitude: 129.03,
+    distanceMeters: 420,
+    imageUrl: '',
+    isFavorite: false,
+    activePartyCount: 0,
+    imageLabel: '상세 테스트 식당',
+    markerDx: 0.5,
+    markerDy: 0.5,
+  );
+}
+
 class _EmptyRestaurantRepository implements RestaurantRepository {
   @override
   Future<List<Restaurant>> discover(RestaurantDiscoverRequest request) async =>
@@ -489,4 +699,11 @@ class _EmptyRestaurantRepository implements RestaurantRepository {
   ) async {
     return restaurant.copyWith(isFavorite: isFavorite);
   }
+}
+
+class _DetailedMockRestaurantRepository extends MockRestaurantRepository {
+  const _DetailedMockRestaurantRepository();
+
+  @override
+  List<Restaurant> nearbyRestaurants() => [_restaurantWithDetails()];
 }

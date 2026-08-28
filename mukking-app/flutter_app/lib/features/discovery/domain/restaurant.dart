@@ -13,6 +13,9 @@ class Restaurant {
     required this.imageLabel,
     required this.markerDx,
     required this.markerDy,
+    this.phone,
+    this.roadAddress,
+    this.placeUrl,
   });
 
   final String id;
@@ -28,6 +31,26 @@ class Restaurant {
   final String imageLabel;
   final double markerDx;
   final double markerDy;
+  final String? phone;
+  final String? roadAddress;
+  final String? placeUrl;
+
+  String get displayAddress {
+    final road = roadAddress?.trim();
+    return road == null || road.isEmpty ? address : road;
+  }
+
+  Uri? get placeUri {
+    final value = placeUrl?.trim();
+    if (value == null || value.isEmpty) return null;
+    final uri = Uri.tryParse(value);
+    if (uri == null ||
+        !uri.hasAuthority ||
+        (uri.scheme != 'https' && uri.scheme != 'http')) {
+      return null;
+    }
+    return uri;
+  }
 
   String get distanceLabel {
     final meters = distanceMeters;
@@ -53,6 +76,9 @@ class Restaurant {
     String? imageLabel,
     double? markerDx,
     double? markerDy,
+    String? phone,
+    String? roadAddress,
+    String? placeUrl,
   }) {
     return Restaurant(
       id: id ?? this.id,
@@ -69,6 +95,9 @@ class Restaurant {
       imageLabel: imageLabel ?? this.imageLabel,
       markerDx: markerDx ?? this.markerDx,
       markerDy: markerDy ?? this.markerDy,
+      phone: phone ?? this.phone,
+      roadAddress: roadAddress ?? this.roadAddress,
+      placeUrl: placeUrl ?? this.placeUrl,
     );
   }
 

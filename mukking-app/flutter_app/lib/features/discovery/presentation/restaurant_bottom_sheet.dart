@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_routes.dart';
+import '../../../core/platform/external_url_launcher.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
 import '../../matching/providers/matching_provider.dart';
@@ -10,6 +11,8 @@ import '../domain/restaurant.dart';
 import '../providers/discovery_provider.dart';
 
 const restaurantDetailsSheetKey = Key('restaurant-details-sheet');
+const restaurantPhoneKey = Key('restaurant-phone');
+const restaurantPlaceUrlButtonKey = Key('restaurant-place-url-button');
 
 Future<void> showRestaurantDetailsSheet(
   BuildContext context, {
@@ -58,6 +61,8 @@ class RestaurantBottomSheet extends ConsumerWidget {
     final partiesAsync = ref.watch(partiesByRestaurantProvider(restaurant.id));
     final parties = partiesAsync.valueOrNull ?? const [];
     final firstParty = parties.isEmpty ? null : parties.first;
+    final phone = restaurant.phone?.trim();
+    final placeUri = restaurant.placeUri;
 
     return MukkingCard(
       child: Column(
@@ -116,11 +121,31 @@ class RestaurantBottomSheet extends ConsumerWidget {
                       ].join(' · '),
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    if (restaurant.address.isNotEmpty) ...[
+                    if (restaurant.displayAddress.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
-                        restaurant.address,
+                        restaurant.displayAddress,
                         style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                    if (phone != null && phone.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        key: restaurantPhoneKey,
+                        children: [
+                          Icon(
+                            Icons.phone_outlined,
+                            size: 17,
+                            color: tokens.textSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              phone,
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                     const SizedBox(height: 6),
@@ -153,6 +178,27 @@ class RestaurantBottomSheet extends ConsumerWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
+              if (placeUri != null)
+                _ActionChipButton(
+                  key: restaurantPlaceUrlButtonKey,
+                  icon: Icons.open_in_new_rounded,
+                  label: '카카오맵에서 자세히 보기',
+                  color: tokens.secondary,
+                  onTap: () async {
+                    try {
+                      final launched =
+                          await ref.read(externalUrlLauncherProvider)(placeUri);
+                      if (launched || !context.mounted) return;
+                    } catch (_) {
+                      if (!context.mounted) return;
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('카카오맵 상세 페이지를 열지 못했어요.'),
+                      ),
+                    );
+                  },
+                ),
               _ActionChipButton(
                 icon: restaurant.isFavorite
                     ? Icons.favorite_rounded
@@ -209,6 +255,7 @@ class RestaurantBottomSheet extends ConsumerWidget {
 
 class _ActionChipButton extends StatelessWidget {
   const _ActionChipButton({
+    super.key,
     required this.icon,
     required this.label,
     required this.color,

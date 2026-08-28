@@ -206,12 +206,25 @@ async function main() {
       .map((id, index) => `${String.fromCharCode(65 + index)}=${nearbyIds.has(id)}`)
       .join(",");
     const responseShapeCount = nearbyRows.filter(hasRestaurantResponseShape).length;
+    const kakaoPhoneCount = kakaoRows.filter(
+      (row) => typeof row.phone === "string" && row.phone.trim().length > 0
+    ).length;
+    const kakaoWithoutPhoneCount = kakaoRows.length - kakaoPhoneCount;
+    const kakaoPlaceUrlCount = kakaoRows.filter(
+      (row) =>
+        row.metadata &&
+        typeof row.metadata.placeUrl === "string" &&
+        row.metadata.placeUrl.trim().length > 0
+    ).length;
 
     console.log(
       `[KAKAO_LOCAL] INFO nearby request lat=${nearbyRequest.latitude}, lng=${nearbyRequest.longitude}, radiusKm=${nearbyRequest.radiusKm}, limit=${nearbyRequest.limit}, offset=${nearbyRequest.offset}`
     );
     console.log(
       `[KAKAO_LOCAL] INFO nearby response status=${nearby.status}, total=${nearbyRows.length}, kakao=${kakaoRows.length}, distancePresent=${validDistanceCount}, distanceMissing=${missingDistanceCount}, responseShape=${responseShapeCount}/${nearbyRows.length}`
+    );
+    console.log(
+      `[KAKAO_LOCAL] INFO Kakao optional details phonePresent=${kakaoPhoneCount}, phoneMissing=${kakaoWithoutPhoneCount}, placeUrlPresent=${kakaoPlaceUrlCount}`
     );
     console.log(
       `[KAKAO_LOCAL] INFO nearby distance sorted=${allSorted}, kakaoSorted=${kakaoSorted}, max=${maximumDistance}, firstInversion=${firstInversion ? `${firstInversion.index}:${firstInversion.previous}>${firstInversion.current}` : "none"}`
@@ -229,6 +242,12 @@ async function main() {
         distances.every(isFiniteDistance) &&
         isAscending(distances),
       `status=${nearby.status}, total=${nearbyRows.length}, kakaoCount=${kakaoRows.length}, distancePresent=${validDistanceCount}, distanceMissing=${missingDistanceCount}, allSorted=${allSorted}, kakaoSorted=${kakaoSorted}, maxDistance=${maximumDistance}, responseShape=${responseShapeCount}/${nearbyRows.length}, tests=${testRestaurantPresence}`
+    );
+    record(
+      "optional Kakao details preserve Restaurant response",
+      kakaoPhoneCount + kakaoWithoutPhoneCount === kakaoRows.length &&
+        kakaoPlaceUrlCount === kakaoRows.length,
+      `phonePresent=${kakaoPhoneCount}, phoneMissing=${kakaoWithoutPhoneCount}, placeUrlPresent=${kakaoPlaceUrlCount}`
     );
 
     const directRpcParameters = {

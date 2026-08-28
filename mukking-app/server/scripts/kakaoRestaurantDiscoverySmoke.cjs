@@ -85,9 +85,16 @@ async function testNormalization() {
   record(
     "category leaf and minimal metadata",
     normalized?.category === "국밥" &&
-      normalized?.metadata?.categoryGroupCode === "FD6" &&
-      normalized?.metadata?.placeUrl === "https://place.map.kakao.com/test"
+      normalized?.metadata?.categoryGroupCode === "FD6"
   );
+  record("phone normalized", normalized?.phone === "051-000-0000");
+  record(
+    "place URL normalized",
+    normalized?.metadata?.placeUrl === "https://place.map.kakao.com/test"
+  );
+
+  const withoutPhone = normalizeKakaoRestaurant(document({ phone: "  " }));
+  record("empty phone omitted", withoutPhone?.phone === undefined);
 
   const fallback = normalizeKakaoRestaurant(
     document({ road_address_name: "", address_name: "부산 동구 지번 2" })
@@ -105,13 +112,21 @@ async function testRepositoryUpsert() {
   if (!first) throw new Error("normalization fixture failed");
 
   const [created] = await memoryRestaurantRepository.upsertMany([first]);
+  db.restaurants.set(created.id, {
+    ...created,
+    metadata: { ...created.metadata, retainedMetadata: "keep" }
+  });
   db.restaurantFavorites.set(`user:${created.id}`, {
     userId: "user",
     restaurantId: created.id,
     createdAt: new Date().toISOString()
   });
   const updatedInput = normalizeKakaoRestaurant(
-    document({ place_name: "Updated Kakao restaurant", phone: "" })
+    document({
+      place_name: "Updated Kakao restaurant",
+      phone: "",
+      place_url: "https://place.map.kakao.com/updated"
+    })
   );
   if (!updatedInput) throw new Error("updated normalization fixture failed");
   const [updated] = await memoryRestaurantRepository.upsertMany([
@@ -125,7 +140,10 @@ async function testRepositoryUpsert() {
   );
   record(
     "updated Kakao data updates existing row",
-    updated.name === "Updated Kakao restaurant" && updated.phone === undefined
+    updated.name === "Updated Kakao restaurant" &&
+      updated.phone === undefined &&
+      updated.metadata.placeUrl === "https://place.map.kakao.com/updated" &&
+      updated.metadata.retainedMetadata === "keep"
   );
   record(
     "stable provider id preserves relations",
