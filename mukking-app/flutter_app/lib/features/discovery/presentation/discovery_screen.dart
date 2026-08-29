@@ -24,6 +24,13 @@ const nearbyRestaurantListKey = Key('nearby-restaurant-list');
 const searchThisAreaButtonKey = Key('search-this-area-button');
 const discoverySearchFieldKey = Key('discovery-search-field');
 const discoveryResultCountKey = Key('discovery-result-count');
+const discoverySortButtonKey = Key('discovery-sort-button');
+const favoritesOnlyFilterKey = Key('favorites-only-filter');
+const activePartyOnlyFilterKey = Key('active-party-only-filter');
+const clearDiscoveryFiltersKey = Key('clear-discovery-filters');
+
+Key discoverySortOptionKey(RestaurantSortOption option) =>
+    ValueKey('discovery-sort-${option.name}');
 
 class DiscoveryScreen extends ConsumerWidget {
   const DiscoveryScreen({super.key});
@@ -78,6 +85,15 @@ class DiscoveryScreen extends ConsumerWidget {
           query: filter.query,
           iconColor: tokens.primary,
           onChanged: ref.read(discoveryFilterProvider.notifier).updateQuery,
+        ),
+        const SizedBox(height: 10),
+        _DiscoveryQuickFilters(
+          filter: filter,
+          onToggleFavorites:
+              ref.read(discoveryFilterProvider.notifier).toggleFavoritesOnly,
+          onToggleActiveParty:
+              ref.read(discoveryFilterProvider.notifier).toggleActivePartyOnly,
+          onClear: ref.read(discoveryFilterProvider.notifier).clearCriteria,
         ),
         const SizedBox(height: 12),
         SingleChildScrollView(
@@ -135,9 +151,21 @@ class DiscoveryScreen extends ConsumerWidget {
         const _MapLegendRow(),
         const SizedBox(height: 16),
         if (restaurants.isNotEmpty) ...[
-          Text(
-            isNearbyMode ? '내 주변 식당' : '식당 목록',
-            style: Theme.of(context).textTheme.titleLarge,
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  isNearbyMode ? '내 주변 식당' : '식당 목록',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              const SizedBox(width: 12),
+              _DiscoverySortMenu(
+                selectedSort: filter.selectedSort,
+                onSelected:
+                    ref.read(discoveryFilterProvider.notifier).selectSort,
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           _RestaurantList(
@@ -167,6 +195,126 @@ class DiscoveryScreen extends ConsumerWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _DiscoveryQuickFilters extends StatelessWidget {
+  const _DiscoveryQuickFilters({
+    required this.filter,
+    required this.onToggleFavorites,
+    required this.onToggleActiveParty,
+    required this.onClear,
+  });
+
+  final DiscoveryFilterState filter;
+  final VoidCallback onToggleFavorites;
+  final VoidCallback onToggleActiveParty;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          FilterChip(
+            key: favoritesOnlyFilterKey,
+            selected: filter.favoritesOnly,
+            avatar: const Icon(Icons.favorite_outline_rounded, size: 18),
+            label: const Text('찜한 식당'),
+            onSelected: (_) => onToggleFavorites(),
+          ),
+          const SizedBox(width: 8),
+          FilterChip(
+            key: activePartyOnlyFilterKey,
+            selected: filter.activePartyOnly,
+            avatar: const Icon(Icons.groups_2_outlined, size: 18),
+            label: const Text('모집 중'),
+            onSelected: (_) => onToggleActiveParty(),
+          ),
+          if (filter.isActive) ...[
+            const SizedBox(width: 6),
+            TextButton.icon(
+              key: clearDiscoveryFiltersKey,
+              onPressed: onClear,
+              icon: const Icon(Icons.refresh_rounded, size: 17),
+              label: const Text('초기화'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DiscoverySortMenu extends StatelessWidget {
+  const _DiscoverySortMenu({
+    required this.selectedSort,
+    required this.onSelected,
+  });
+
+  final RestaurantSortOption selectedSort;
+  final ValueChanged<RestaurantSortOption> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    return PopupMenuButton<RestaurantSortOption>(
+      key: discoverySortButtonKey,
+      initialValue: selectedSort,
+      tooltip: '식당 정렬',
+      onSelected: onSelected,
+      itemBuilder: (context) => [
+        for (final option in RestaurantSortOption.values)
+          PopupMenuItem(
+            key: discoverySortOptionKey(option),
+            value: option,
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 24,
+                  child: option == selectedSort
+                      ? Icon(
+                          Icons.check_rounded,
+                          size: 18,
+                          color: tokens.primary,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 6),
+                Text(option.label),
+              ],
+            ),
+          ),
+      ],
+      child: Semantics(
+        button: true,
+        label: '식당 정렬: ${selectedSort.label}',
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: tokens.surface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: tokens.textSecondary.withValues(alpha: 0.22),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.swap_vert_rounded, size: 18, color: tokens.primary),
+              const SizedBox(width: 5),
+              Text(
+                selectedSort.label,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(width: 2),
+              const Icon(Icons.arrow_drop_down_rounded, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -251,6 +399,15 @@ String _emptyStateMessage({
   }
 
   final query = filter.query.trim();
+  final hasSearchOrCategory =
+      query.isNotEmpty || filter.selectedCategory != allRestaurantCategory;
+  final hasQuickFilter = filter.favoritesOnly || filter.activePartyOnly;
+  if (hasSearchOrCategory && hasQuickFilter) return '조건에 맞는 식당이 없어요.';
+  if (filter.favoritesOnly && filter.activePartyOnly) {
+    return '조건에 맞는 식당이 없어요.';
+  }
+  if (filter.favoritesOnly) return '찜한 식당이 없어요.';
+  if (filter.activePartyOnly) return '현재 모집 중인 식당이 없어요.';
   if (query.isNotEmpty) return "'$query' 검색 결과가 없어요.";
   if (filter.selectedCategory != allRestaurantCategory) {
     return '현재 지역에 선택한 카테고리 식당이 없어요.';

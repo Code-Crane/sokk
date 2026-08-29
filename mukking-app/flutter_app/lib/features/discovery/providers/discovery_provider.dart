@@ -34,6 +34,25 @@ class DiscoveryFilterController extends StateNotifier<DiscoveryFilterState> {
     _clearSelectionIfExcluded();
   }
 
+  void selectSort(RestaurantSortOption sort) {
+    state = state.copyWith(selectedSort: sort);
+  }
+
+  void toggleFavoritesOnly() {
+    state = state.copyWith(favoritesOnly: !state.favoritesOnly);
+    _clearSelectionIfExcluded();
+  }
+
+  void toggleActivePartyOnly() {
+    state = state.copyWith(activePartyOnly: !state.activePartyOnly);
+    _clearSelectionIfExcluded();
+  }
+
+  void clearCriteria() {
+    state = DiscoveryFilterState(selectedSort: state.selectedSort);
+    _clearSelectionIfExcluded();
+  }
+
   void clear() {
     state = const DiscoveryFilterState();
     _clearSelectionIfExcluded();
@@ -350,7 +369,7 @@ final discoveryCategoriesProvider = Provider<List<String>>((ref) {
 final filteredRestaurantsProvider = Provider<List<Restaurant>>((ref) {
   final filter = ref.watch(discoveryFilterProvider);
   final restaurants = ref.watch(restaurantsProvider);
-  return filterRestaurants(restaurants, filter);
+  return filterAndSortRestaurants(restaurants, filter);
 });
 
 final selectedRestaurantProvider = Provider<Restaurant?>((ref) {
@@ -439,10 +458,17 @@ class FavoriteRestaurantsController extends StateNotifier<Map<String, bool>> {
   Future<void> toggle(Restaurant restaurant) async {
     final previousOverride = state[restaurant.id];
     final current = previousOverride ?? restaurant.isFavorite;
-    state = {...state, restaurant.id: !current};
+    final nextFavorite = !current;
+    final clearSelection = !nextFavorite &&
+        _ref.read(discoveryFilterProvider).favoritesOnly &&
+        _ref.read(selectedRestaurantIdProvider) == restaurant.id;
+    state = {...state, restaurant.id: nextFavorite};
+    if (clearSelection) {
+      _ref.read(selectedRestaurantIdProvider.notifier).state = null;
+    }
 
     try {
-      await _repository.setFavorite(restaurant, !current);
+      await _repository.setFavorite(restaurant, nextFavorite);
       if (_refreshFromServer) {
         _ref.invalidate(restaurantFeedProvider);
         _ref.invalidate(favoriteRestaurantsApiProvider);
@@ -455,6 +481,9 @@ class FavoriteRestaurantsController extends StateNotifier<Map<String, bool>> {
         restored[restaurant.id] = previousOverride;
       }
       state = restored;
+      if (clearSelection) {
+        _ref.read(selectedRestaurantIdProvider.notifier).state = restaurant.id;
+      }
       rethrow;
     }
   }

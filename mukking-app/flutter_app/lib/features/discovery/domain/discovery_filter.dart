@@ -15,26 +15,54 @@ const restaurantCategoryOrder = <String>[
   '기타',
 ];
 
+enum RestaurantSortOption {
+  distance,
+  activePartyCount,
+  favoriteFirst,
+}
+
+extension RestaurantSortOptionLabel on RestaurantSortOption {
+  String get label => switch (this) {
+        RestaurantSortOption.distance => '거리순',
+        RestaurantSortOption.activePartyCount => '모집 많은 순',
+        RestaurantSortOption.favoriteFirst => '찜 우선',
+      };
+}
+
 class DiscoveryFilterState {
   const DiscoveryFilterState({
     this.query = '',
     this.selectedCategory = allRestaurantCategory,
+    this.selectedSort = RestaurantSortOption.distance,
+    this.favoritesOnly = false,
+    this.activePartyOnly = false,
   });
 
   final String query;
   final String selectedCategory;
+  final RestaurantSortOption selectedSort;
+  final bool favoritesOnly;
+  final bool activePartyOnly;
 
   bool get isActive =>
       normalizeRestaurantSearch(query).isNotEmpty ||
-      selectedCategory != allRestaurantCategory;
+      selectedCategory != allRestaurantCategory ||
+      favoritesOnly ||
+      activePartyOnly;
 
   DiscoveryFilterState copyWith({
     String? query,
     String? selectedCategory,
+    RestaurantSortOption? selectedSort,
+    bool? favoritesOnly,
+    bool? activePartyOnly,
   }) {
     return DiscoveryFilterState(
       query: query ?? this.query,
       selectedCategory: selectedCategory ?? this.selectedCategory,
+      selectedSort: selectedSort ?? this.selectedSort,
+      favoritesOnly: favoritesOnly ?? this.favoritesOnly,
+      activePartyOnly: activePartyOnly ?? this.activePartyOnly,
     );
   }
 }
@@ -144,6 +172,10 @@ List<Restaurant> filterRestaurants(
     final matchesCategory = filter.selectedCategory == allRestaurantCategory ||
         mappedCategory == filter.selectedCategory;
     if (!matchesCategory) return false;
+    if (filter.favoritesOnly && !restaurant.isFavorite) return false;
+    if (filter.activePartyOnly && restaurant.activePartyCount <= 0) {
+      return false;
+    }
     if (query.isEmpty) return true;
 
     final searchable = normalizeRestaurantSearch(
@@ -151,6 +183,49 @@ List<Restaurant> filterRestaurants(
     );
     return searchable.contains(query);
   }).toList(growable: false);
+}
+
+List<Restaurant> filterAndSortRestaurants(
+  List<Restaurant> restaurants,
+  DiscoveryFilterState filter,
+) {
+  final visible = filterRestaurants(restaurants, filter).toList();
+  visible.sort(_restaurantComparator(filter.selectedSort));
+  return List.unmodifiable(visible);
+}
+
+Comparator<Restaurant> _restaurantComparator(RestaurantSortOption option) {
+  return switch (option) {
+    RestaurantSortOption.distance => _compareByDistance,
+    RestaurantSortOption.activePartyCount => _compareByActivePartyCount,
+    RestaurantSortOption.favoriteFirst => _compareByFavoriteFirst,
+  };
+}
+
+int _compareByDistance(Restaurant first, Restaurant second) {
+  final firstDistance = first.distanceMeters;
+  final secondDistance = second.distanceMeters;
+
+  if (firstDistance == null && secondDistance != null) return 1;
+  if (firstDistance != null && secondDistance == null) return -1;
+  if (firstDistance != null && secondDistance != null) {
+    final distanceOrder = firstDistance.compareTo(secondDistance);
+    if (distanceOrder != 0) return distanceOrder;
+  }
+  return first.id.compareTo(second.id);
+}
+
+int _compareByActivePartyCount(Restaurant first, Restaurant second) {
+  final partyOrder = second.activePartyCount.compareTo(first.activePartyCount);
+  if (partyOrder != 0) return partyOrder;
+  return _compareByDistance(first, second);
+}
+
+int _compareByFavoriteFirst(Restaurant first, Restaurant second) {
+  if (first.isFavorite != second.isFavorite) {
+    return first.isFavorite ? -1 : 1;
+  }
+  return _compareByDistance(first, second);
 }
 
 bool _containsAny(String value, List<String> candidates) {
