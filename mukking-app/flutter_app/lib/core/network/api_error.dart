@@ -11,6 +11,7 @@ enum ApiErrorKind {
   server,
   timeout,
   network,
+  cancelled,
   unknown,
 }
 
@@ -44,6 +45,13 @@ class ApiError implements Exception {
         userMessage: kIsWeb
             ? '브라우저에서 API에 연결할 수 없어요. 서버 CORS 허용 주소를 확인해주세요.'
             : '서버에 연결할 수 없어요. 서버 실행 상태와 네트워크를 확인해주세요.',
+      );
+    }
+
+    if (error.type == DioExceptionType.cancel) {
+      return const ApiError(
+        kind: ApiErrorKind.cancelled,
+        userMessage: '이전 요청이 새 요청으로 교체됐어요.',
       );
     }
 

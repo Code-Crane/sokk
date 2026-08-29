@@ -6,12 +6,43 @@ import '../../auth/domain/auth_state.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../data/restaurant_api.dart';
 import '../data/restaurant_repository.dart';
+import '../domain/discovery_filter.dart';
 import '../domain/map_camera_center.dart';
 import '../domain/restaurant.dart';
 
-final selectedCategoryProvider = StateProvider<String>((ref) => '전체');
 final selectedRestaurantIdProvider = StateProvider<String?>((ref) => null);
 final selectedRestaurantFocusRequestProvider = StateProvider<int>((ref) => 0);
+
+final discoveryFilterProvider =
+    StateNotifierProvider<DiscoveryFilterController, DiscoveryFilterState>(
+        (ref) {
+  return DiscoveryFilterController(ref);
+});
+
+class DiscoveryFilterController extends StateNotifier<DiscoveryFilterState> {
+  DiscoveryFilterController(this._ref) : super(const DiscoveryFilterState());
+
+  final Ref _ref;
+
+  void updateQuery(String query) {
+    state = state.copyWith(query: query);
+    _clearSelectionIfExcluded();
+  }
+
+  void selectCategory(String category) {
+    state = state.copyWith(selectedCategory: category);
+    _clearSelectionIfExcluded();
+  }
+
+  void clear() {
+    state = const DiscoveryFilterState();
+    _clearSelectionIfExcluded();
+  }
+
+  void _clearSelectionIfExcluded() {
+    _clearSelectedRestaurantIfExcluded(_ref, filter: state);
+  }
+}
 
 final restaurantListQueryProvider = StateProvider<RestaurantListQuery>((ref) {
   return const RestaurantListQuery(limit: 50, offset: 0);
@@ -42,13 +73,18 @@ final restaurantFeedProvider = FutureProvider<List<Restaurant>>((ref) async {
     );
   }
 
-  final results = await Future.wait([
-    repository.list(query),
-    repository.listFavorites(),
-  ]);
-  final favoriteIds = results[1].map((restaurant) => restaurant.id).toSet();
+  final restaurants = await repository.list(query);
+  List<Restaurant> favorites;
+  try {
+    favorites = await repository.listFavorites();
+  } catch (_) {
+    // RestaurantResponse already carries isFavorite. Favorite hydration is
+    // supplemental and must not turn a successful nearby list into a failure.
+    return restaurants;
+  }
+  final favoriteIds = favorites.map((restaurant) => restaurant.id).toSet();
 
-  return results[0]
+  return restaurants
       .map(
         (restaurant) => restaurant.copyWith(
           isFavorite:
@@ -137,6 +173,7 @@ class SearchAreaController extends StateNotifier<SearchAreaState> {
 
   final Ref _ref;
   final RestaurantRepository _repository;
+  int _operationId = 0;
 
   void onCameraIdle(MapCameraIdleEvent event) {
     final previousCenter = state.center;
@@ -155,7 +192,8 @@ class SearchAreaController extends StateNotifier<SearchAreaState> {
       center: event.center,
       lastSearchedCenter: anchor,
       hasMovedMeaningfully: _hasMeaningfullyMoved(anchor, event.center),
-      status: SearchAreaStatus.idle,
+      status:
+          state.isLoading ? SearchAreaStatus.loading : SearchAreaStatus.idle,
       clearError: true,
     );
   }
@@ -163,6 +201,7 @@ class SearchAreaController extends StateNotifier<SearchAreaState> {
   Future<bool> searchCurrentArea() async {
     final center = state.center;
     if (center == null || state.isLoading) return false;
+    final operationId = ++_operationId;
 
     final previousQuery = _ref.read(restaurantListQueryProvider);
     final favoriteOverrides = _ref.read(favoriteOverridesProvider);
@@ -199,18 +238,23 @@ class SearchAreaController extends StateNotifier<SearchAreaState> {
           radiusKm: radiusKm,
         ),
       );
+      if (operationId != _operationId) return true;
       _ref.read(restaurantListQueryProvider.notifier).state = nextQuery;
-      await _ref.read(restaurantFeedProvider.future);
+      await _refreshLatestRestaurantFeed();
+      if (operationId != _operationId) return true;
+      _clearSelectedRestaurantIfExcluded(_ref);
+      final visibleCenter = state.center ?? center;
       state = state.copyWith(
-        center: center,
+        center: visibleCenter,
         lastSearchedCenter: center,
         status: SearchAreaStatus.idle,
-        hasMovedMeaningfully: false,
+        hasMovedMeaningfully: _hasMeaningfullyMoved(center, visibleCenter),
         clearError: true,
         clearPreservedRestaurants: true,
       );
       return true;
     } catch (error) {
+      if (operationId != _operationId) return true;
       if (_ref.read(restaurantListQueryProvider) != previousQuery) {
         _ref.read(restaurantListQueryProvider.notifier).state = previousQuery;
       }
@@ -227,6 +271,7 @@ class SearchAreaController extends StateNotifier<SearchAreaState> {
   }
 
   void resetForExternalCenter(MapCameraCenter center) {
+    _operationId += 1;
     state = SearchAreaState(
       center: center,
       lastSearchedCenter: center,
@@ -234,7 +279,20 @@ class SearchAreaController extends StateNotifier<SearchAreaState> {
   }
 
   void reset() {
+    _operationId += 1;
     state = const SearchAreaState();
+  }
+
+  Future<void> _refreshLatestRestaurantFeed() async {
+    try {
+      final refreshedFeed = _ref.refresh(restaurantFeedProvider.future);
+      await refreshedFeed;
+    } on ApiError catch (error) {
+      if (error.kind != ApiErrorKind.cancelled) rethrow;
+      // A provider generation can be cancelled when the query invalidation
+      // and an explicit refresh overlap. Await the currently active generation.
+      await _ref.read(restaurantFeedProvider.future);
+    }
   }
 
   bool _hasMeaningfullyMoved(
@@ -274,30 +332,50 @@ final favoriteRestaurantIdsProvider = Provider<Set<String>>((ref) {
 });
 
 final discoveryCategoriesProvider = Provider<List<String>>((ref) {
-  final categories = ref.watch(restaurantsProvider).map((r) => r.category);
-  return ['전체', ...categories.toSet()];
+  final filter = ref.watch(discoveryFilterProvider);
+  final available = ref
+      .watch(restaurantsProvider)
+      .map((restaurant) => mapRestaurantCategory(restaurant.category))
+      .toSet();
+  final categories = <String>[allRestaurantCategory];
+
+  for (final category in restaurantCategoryOrder) {
+    if (available.contains(category) || filter.selectedCategory == category) {
+      categories.add(category);
+    }
+  }
+  return categories;
 });
 
 final filteredRestaurantsProvider = Provider<List<Restaurant>>((ref) {
-  final selectedCategory = ref.watch(selectedCategoryProvider);
+  final filter = ref.watch(discoveryFilterProvider);
   final restaurants = ref.watch(restaurantsProvider);
-
-  if (selectedCategory == '전체') return restaurants;
-  return restaurants
-      .where((restaurant) => restaurant.category == selectedCategory)
-      .toList();
+  return filterRestaurants(restaurants, filter);
 });
 
 final selectedRestaurantProvider = Provider<Restaurant?>((ref) {
   final restaurants = ref.watch(filteredRestaurantsProvider);
-  if (restaurants.isEmpty) return null;
-
   final selectedId = ref.watch(selectedRestaurantIdProvider);
-  return restaurants.firstWhere(
-    (restaurant) => restaurant.id == selectedId,
-    orElse: () => restaurants.first,
-  );
+  if (selectedId == null) return null;
+  for (final restaurant in restaurants) {
+    if (restaurant.id == selectedId) return restaurant;
+  }
+  return null;
 });
+
+void _clearSelectedRestaurantIfExcluded(
+  Ref ref, {
+  DiscoveryFilterState? filter,
+}) {
+  final selectedId = ref.read(selectedRestaurantIdProvider);
+  if (selectedId == null) return;
+  final filtered = filterRestaurants(
+    ref.read(restaurantsProvider),
+    filter ?? ref.read(discoveryFilterProvider),
+  );
+  if (filtered.any((restaurant) => restaurant.id == selectedId)) return;
+  ref.read(selectedRestaurantIdProvider.notifier).state = null;
+}
 
 final favoriteRestaurantsProvider = Provider<List<Restaurant>>((ref) {
   return ref

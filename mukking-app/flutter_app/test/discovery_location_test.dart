@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:kakao_maps_flutter/kakao_maps_flutter.dart';
 import 'package:mukking_flutter_app/core/config/app_config.dart';
 import 'package:mukking_flutter_app/core/network/api_client.dart';
+import 'package:mukking_flutter_app/core/network/api_error.dart';
 import 'package:mukking_flutter_app/core/network/dio_provider.dart';
 import 'package:mukking_flutter_app/core/theme/app_theme.dart';
 import 'package:mukking_flutter_app/core/theme/theme_tokens.dart';
@@ -24,6 +25,7 @@ import 'package:mukking_flutter_app/features/discovery/presentation/map/kakao_ma
 import 'package:mukking_flutter_app/features/discovery/presentation/map/kakao_cluster_policy.dart';
 import 'package:mukking_flutter_app/features/discovery/presentation/map/restaurant_camera_policy.dart';
 import 'package:mukking_flutter_app/features/discovery/presentation/map/restaurant_map_view.dart';
+import 'package:mukking_flutter_app/features/discovery/presentation/search_this_area_button.dart';
 import 'package:mukking_flutter_app/features/discovery/providers/discovery_location_provider.dart';
 import 'package:mukking_flutter_app/features/discovery/providers/discovery_provider.dart';
 
@@ -362,6 +364,133 @@ void main() {
     expect(after.map((restaurant) => restaurant.id),
         before.map((restaurant) => restaurant.id));
     expect(after.single.isFavorite, before.single.isFavorite);
+  });
+
+  test('successful nearby refresh is not failed by favorite hydration',
+      () async {
+    final repository = _SearchAreaRestaurantRepository(failFavorites: true);
+    final container = _container(_FakeLocationService(), repository);
+    addTearDown(container.dispose);
+    await container.read(restaurantFeedProvider.future);
+    final controller = container.read(searchAreaProvider.notifier);
+    _moveSearchArea(controller);
+
+    expect(await controller.searchCurrentArea(), isTrue);
+    expect(container.read(searchAreaProvider).status, SearchAreaStatus.idle);
+    expect(container.read(searchAreaProvider).errorMessage, isNull);
+    expect(container.read(restaurantsProvider), isNotEmpty);
+  });
+
+  testWidgets('successful rendered data never shows a false error snackbar',
+      (tester) async {
+    final repository = _SearchAreaRestaurantRepository(failFavorites: true);
+    final container = _container(_FakeLocationService(), repository);
+    addTearDown(container.dispose);
+    await container.read(restaurantFeedProvider.future);
+    _moveSearchArea(container.read(searchAreaProvider.notifier));
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: Scaffold(body: Center(child: SearchThisAreaButton())),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('이 지역에서 다시 검색'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.text('이 지역의 식당을 불러오지 못했어요. 다시 시도해주세요.'), findsNothing);
+    expect(container.read(restaurantsProvider), isNotEmpty);
+  });
+
+  test('actual nearby refresh failure remains an error', () async {
+    final repository = _SearchAreaRestaurantRepository(
+      failNearbyRefresh: true,
+    );
+    final container = _container(_FakeLocationService(), repository);
+    addTearDown(container.dispose);
+    await container.read(restaurantFeedProvider.future);
+    final before = container.read(restaurantsProvider);
+    final controller = container.read(searchAreaProvider.notifier);
+    _moveSearchArea(controller);
+
+    expect(await controller.searchCurrentArea(), isFalse);
+
+    final state = container.read(searchAreaProvider);
+    expect(state.status, SearchAreaStatus.error);
+    expect(state.errorMessage, isNotNull);
+    final after = container.read(restaurantsProvider);
+    expect(
+      after.map((restaurant) => restaurant.id),
+      before.map((restaurant) => restaurant.id),
+    );
+    expect(after.single.isFavorite, before.single.isFavorite);
+  });
+
+  test('cancelled stale refresh yields to the active feed generation',
+      () async {
+    final staleGate = Completer<void>();
+    final staleStarted = Completer<void>();
+    final repository = _SearchAreaRestaurantRepository(
+      cancelSecondList: true,
+      secondListGate: staleGate.future,
+      secondListStarted: staleStarted,
+    );
+    final container = _container(_FakeLocationService(), repository);
+    addTearDown(container.dispose);
+    await container.read(restaurantFeedProvider.future);
+    final controller = container.read(searchAreaProvider.notifier);
+    _moveSearchArea(controller);
+
+    final search = controller.searchCurrentArea();
+    await staleStarted.future;
+    final activeRefresh = container.refresh(restaurantFeedProvider.future);
+    await activeRefresh;
+    staleGate.complete();
+
+    expect(await search, isTrue);
+    expect(container.read(searchAreaProvider).status, SearchAreaStatus.idle);
+    expect(container.read(searchAreaProvider).errorMessage, isNull);
+    expect(repository.queries, hasLength(3));
+  });
+
+  test('304 with reusable cached list body is treated as success', () async {
+    final adapter = _StatusListAdapter(statusCode: 304);
+    final dio = Dio(BaseOptions(baseUrl: 'http://localhost:4000'))
+      ..httpClientAdapter = adapter;
+
+    final rows = await ApiClient(dio).getList('/api/restaurants');
+
+    expect(rows, hasLength(1));
+    expect(rows.single, containsPair('id', 'cached-restaurant'));
+  });
+
+  test('superseded search cannot overwrite the latest center or error state',
+      () async {
+    final gate = Completer<void>();
+    final repository = _SearchAreaRestaurantRepository(
+      discoveryGate: gate.future,
+    );
+    final container = _container(_FakeLocationService(), repository);
+    addTearDown(container.dispose);
+    await container.read(restaurantFeedProvider.future);
+    final controller = container.read(searchAreaProvider.notifier);
+    _moveSearchArea(controller);
+
+    final staleSearch = controller.searchCurrentArea();
+    await Future<void>.delayed(Duration.zero);
+    const latestCenter = MapCameraCenter(latitude: 35.3, longitude: 129.2);
+    controller.resetForExternalCenter(latestCenter);
+    gate.complete();
+
+    expect(await staleSearch, isTrue);
+    final state = container.read(searchAreaProvider);
+    expect(state.center, latestCenter);
+    expect(state.status, SearchAreaStatus.idle);
+    expect(state.errorMessage, isNull);
   });
 
   test('API provider forwards the nearby query to Dio', () async {
@@ -718,6 +847,21 @@ ProviderContainer _container(
   );
 }
 
+void _moveSearchArea(SearchAreaController controller) {
+  controller.onCameraIdle(
+    const MapCameraIdleEvent(
+      center: MapCameraCenter(latitude: 35.1, longitude: 129.0),
+      userInitiated: false,
+    ),
+  );
+  controller.onCameraIdle(
+    const MapCameraIdleEvent(
+      center: MapCameraCenter(latitude: 35.2, longitude: 129.1),
+      userInitiated: true,
+    ),
+  );
+}
+
 Restaurant _restaurant({required String id, int? distanceMeters = 800}) {
   return Restaurant(
     id: id,
@@ -853,11 +997,21 @@ class _ThrowingRestaurantRepository implements RestaurantRepository {
 class _SearchAreaRestaurantRepository implements RestaurantRepository {
   _SearchAreaRestaurantRepository({
     this.failDiscovery = false,
+    this.failNearbyRefresh = false,
+    this.failFavorites = false,
+    this.cancelSecondList = false,
     this.discoveryGate,
+    this.secondListGate,
+    this.secondListStarted,
   });
 
   final bool failDiscovery;
+  final bool failNearbyRefresh;
+  final bool failFavorites;
+  final bool cancelSecondList;
   final Future<void>? discoveryGate;
+  final Future<void>? secondListGate;
+  final Completer<void>? secondListStarted;
   final List<RestaurantListQuery> queries = [];
   final List<RestaurantDiscoverRequest> discoverRequests = [];
 
@@ -875,11 +1029,34 @@ class _SearchAreaRestaurantRepository implements RestaurantRepository {
   @override
   Future<List<Restaurant>> list(RestaurantListQuery query) async {
     queries.add(query);
+    final call = queries.length;
+    if (call == 2) {
+      if (secondListStarted != null && !secondListStarted!.isCompleted) {
+        secondListStarted!.complete();
+      }
+      if (secondListGate != null) await secondListGate;
+      if (cancelSecondList) {
+        throw const ApiError(
+          kind: ApiErrorKind.cancelled,
+          userMessage: 'stale request cancelled',
+        );
+      }
+      if (failNearbyRefresh) {
+        throw const ApiError(
+          kind: ApiErrorKind.server,
+          statusCode: 500,
+          userMessage: 'nearby request failed',
+        );
+      }
+    }
     return [_restaurant(id: 'restaurant-existing')];
   }
 
   @override
-  Future<List<Restaurant>> listFavorites() async => const [];
+  Future<List<Restaurant>> listFavorites() async {
+    if (failFavorites) throw StateError('favorite hydration failed');
+    return const [];
+  }
 
   @override
   Future<Restaurant> setFavorite(
@@ -903,6 +1080,32 @@ class _RestaurantListRecordingAdapter implements HttpClientAdapter {
     return ResponseBody.fromString(
       jsonEncode(<Object>[]),
       200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+class _StatusListAdapter implements HttpClientAdapter {
+  _StatusListAdapter({required this.statusCode});
+
+  final int statusCode;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    return ResponseBody.fromString(
+      jsonEncode(<Object>[
+        <String, Object?>{'id': 'cached-restaurant'},
+      ]),
+      statusCode,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
       },

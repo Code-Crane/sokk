@@ -35,6 +35,10 @@ class _RestaurantDetailsSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen<String?>(selectedRestaurantIdProvider, (_, selectedId) {
+      if (selectedId == restaurantId || !context.mounted) return;
+      Navigator.of(context).pop();
+    });
     final restaurant = ref.watch(restaurantByIdProvider(restaurantId));
     if (restaurant == null) {
       return const SizedBox.shrink();

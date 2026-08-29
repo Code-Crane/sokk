@@ -81,6 +81,17 @@ class ApiClient {
     try {
       return await request();
     } on DioException catch (error) {
+      final cachedResponse = error.response;
+      if (cachedResponse?.statusCode == 304 && cachedResponse?.data != null) {
+        return Response<Object?>(
+          data: cachedResponse!.data,
+          headers: cachedResponse.headers,
+          requestOptions: cachedResponse.requestOptions,
+          statusCode: cachedResponse.statusCode,
+          statusMessage: cachedResponse.statusMessage,
+          extra: cachedResponse.extra,
+        );
+      }
       throw ApiError.fromDio(error);
     }
   }

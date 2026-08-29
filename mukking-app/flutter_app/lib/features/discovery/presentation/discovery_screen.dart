@@ -10,6 +10,7 @@ import '../../../core/router/app_routes.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
 import '../../matching/providers/matching_provider.dart';
+import '../domain/discovery_filter.dart';
 import '../domain/restaurant.dart';
 import '../domain/restaurant_map_marker.dart';
 import '../providers/discovery_location_provider.dart';
@@ -21,6 +22,8 @@ import 'search_this_area_button.dart';
 const fullscreenMapButtonKey = Key('open-fullscreen-map-button');
 const nearbyRestaurantListKey = Key('nearby-restaurant-list');
 const searchThisAreaButtonKey = Key('search-this-area-button');
+const discoverySearchFieldKey = Key('discovery-search-field');
+const discoveryResultCountKey = Key('discovery-result-count');
 
 class DiscoveryScreen extends ConsumerWidget {
   const DiscoveryScreen({super.key});
@@ -29,7 +32,8 @@ class DiscoveryScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
     final categories = ref.watch(discoveryCategoriesProvider);
-    final selectedCategory = ref.watch(selectedCategoryProvider);
+    final filter = ref.watch(discoveryFilterProvider);
+    final rawRestaurants = ref.watch(restaurantsProvider);
     final restaurants = ref.watch(filteredRestaurantsProvider);
     final selectedRestaurant = ref.watch(selectedRestaurantProvider);
     final restaurantFeed = ref.watch(restaurantFeedProvider);
@@ -69,11 +73,11 @@ class DiscoveryScreen extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 16),
-        TextField(
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.search_rounded, color: tokens.primary),
-            hintText: '맛집, 음식, 지역 검색',
-          ),
+        _DiscoverySearchField(
+          key: discoverySearchFieldKey,
+          query: filter.query,
+          iconColor: tokens.primary,
+          onChanged: ref.read(discoveryFilterProvider.notifier).updateQuery,
         ),
         const SizedBox(height: 12),
         SingleChildScrollView(
@@ -82,14 +86,12 @@ class DiscoveryScreen extends ConsumerWidget {
             children: [
               for (final category in categories) ...[
                 ChoiceChip(
-                  selected: selectedCategory == category,
+                  key: ValueKey('discovery-category-$category'),
+                  selected: filter.selectedCategory == category,
                   label: Text(category),
-                  onSelected: (_) {
-                    ref.read(selectedCategoryProvider.notifier).state =
-                        category;
-                    ref.read(selectedRestaurantIdProvider.notifier).state =
-                        null;
-                  },
+                  onSelected: (_) => ref
+                      .read(discoveryFilterProvider.notifier)
+                      .selectCategory(category),
                 ),
                 const SizedBox(width: 8),
               ],
@@ -102,13 +104,15 @@ class DiscoveryScreen extends ConsumerWidget {
           const SizedBox(height: 12),
         ],
         restaurantFeed.when(
-          data: (items) {
-            final message = isNearbyMode
-                ? items.isEmpty
-                    ? '현재 위치 5km 안에 등록된 식당이 없어요.'
-                    : '현재 위치 5km 안의 식당 ${items.length}곳을 불러왔어요.'
-                : '맛집 ${items.length}곳을 불러왔어요.';
+          data: (_) {
+            final message = _resultStatusMessage(
+              rawCount: rawRestaurants.length,
+              filteredCount: restaurants.length,
+              filter: filter,
+              isNearbyMode: isNearbyMode,
+            );
             return _RestaurantFeedStatus(
+              key: discoveryResultCountKey,
               message: message,
               icon: Icons.restaurant_rounded,
             );
@@ -151,18 +155,107 @@ class DiscoveryScreen extends ConsumerWidget {
         ],
         if (selectedRestaurant != null)
           RestaurantBottomSheet(restaurant: selectedRestaurant)
-        else
+        else if (restaurants.isEmpty)
           MukkingCard(
             child: Text(
-              isNearbyMode
-                  ? '현재 위치 5km 안에 등록된 식당이 없어요.'
-                  : '선택 가능한 식당이 없어요. 카테고리 필터를 변경해보세요.',
+              _emptyStateMessage(
+                rawRestaurants: rawRestaurants,
+                filter: filter,
+                isNearbyMode: isNearbyMode,
+              ),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
       ],
     );
   }
+}
+
+class _DiscoverySearchField extends StatefulWidget {
+  const _DiscoverySearchField({
+    required this.query,
+    required this.iconColor,
+    required this.onChanged,
+    super.key,
+  });
+
+  final String query;
+  final Color iconColor;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_DiscoverySearchField> createState() => _DiscoverySearchFieldState();
+}
+
+class _DiscoverySearchFieldState extends State<_DiscoverySearchField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.query);
+  }
+
+  @override
+  void didUpdateWidget(covariant _DiscoverySearchField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.query == _controller.text) return;
+    _controller.value = TextEditingValue(
+      text: widget.query,
+      selection: TextSelection.collapsed(offset: widget.query.length),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      textInputAction: TextInputAction.search,
+      onChanged: widget.onChanged,
+      decoration: InputDecoration(
+        prefixIcon: Icon(Icons.search_rounded, color: widget.iconColor),
+        hintText: '맛집, 음식, 지역 검색',
+      ),
+    );
+  }
+}
+
+String _resultStatusMessage({
+  required int rawCount,
+  required int filteredCount,
+  required DiscoveryFilterState filter,
+  required bool isNearbyMode,
+}) {
+  if (rawCount == 0) {
+    return isNearbyMode ? '현재 위치 5km 안에 등록된 식당이 없어요.' : '현재 지역에 등록된 식당이 없어요.';
+  }
+  if (filter.isActive) return '전체 $rawCount곳 중 $filteredCount곳';
+  return isNearbyMode
+      ? '현재 위치 5km 안의 식당 $filteredCount곳을 불러왔어요.'
+      : '식당 $filteredCount곳을 불러왔어요.';
+}
+
+String _emptyStateMessage({
+  required List<Restaurant> rawRestaurants,
+  required DiscoveryFilterState filter,
+  required bool isNearbyMode,
+}) {
+  if (rawRestaurants.isEmpty) {
+    return isNearbyMode ? '현재 위치 5km 안에 등록된 식당이 없어요.' : '현재 지역에 등록된 식당이 없어요.';
+  }
+
+  final query = filter.query.trim();
+  if (query.isNotEmpty) return "'$query' 검색 결과가 없어요.";
+  if (filter.selectedCategory != allRestaurantCategory) {
+    return '현재 지역에 선택한 카테고리 식당이 없어요.';
+  }
+  return '조건에 맞는 식당이 없어요.';
 }
 
 class _DiscoveryMapSection extends ConsumerWidget {
@@ -257,6 +350,7 @@ class _RestaurantFeedStatus extends StatelessWidget {
     required this.icon,
     this.onRetry,
     this.showProgress = false,
+    super.key,
   });
 
   final String message;

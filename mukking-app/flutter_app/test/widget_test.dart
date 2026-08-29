@@ -53,7 +53,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('멘야 하쿠'), findsWidgets);
     expect(find.text('라멘 · 800m'), findsWidgets);
-    expect(find.text('현재 모집 중 파티 2개'), findsOneWidget);
+    expect(find.text('모집 중 2개'), findsOneWidget);
   });
 
   testWidgets('restaurant marker opens details and keeps favorite flow',
