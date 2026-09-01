@@ -1,0 +1,23 @@
+import type {
+  ChatMessage,
+  ChatRoom,
+  JoinRequest,
+  MatchingPost,
+  MannerRating,
+  PendingEvaluation,
+  UserAccount,
+  UserReport,
+  VerificationClaim
+} from "../../shared/types";
+
+export const db = {
+  users: new Map<string, UserAccount>(),
+  verificationClaims: new Map<string, VerificationClaim>(),
+  posts: new Map<string, MatchingPost>(),
+  joinRequests: new Map<string, JoinRequest>(),
+  chatRooms: new Map<string, ChatRoom>(),
+  chatMessages: new Map<string, ChatMessage[]>(),
+  pendingEvaluations: new Map<string, PendingEvaluation>(),
+  mannerRatings: new Map<string, MannerRating>(),
+  reports: new Map<string, UserReport>()
+};

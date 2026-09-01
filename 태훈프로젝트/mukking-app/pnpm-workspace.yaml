@@ -1,0 +1,6 @@
+packages:
+  - mobile
+  - server
+  - admin
+  - shared
+

@@ -1,0 +1,30 @@
+{
+  "name": "@mukking/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "node --require ./scripts/sanitizeMetroHeaders.cjs ./node_modules/expo/bin/cli start",
+    "start:localhost": "node --require ./scripts/sanitizeMetroHeaders.cjs ./node_modules/expo/bin/cli start --localhost",
+    "android": "node --require ./scripts/sanitizeMetroHeaders.cjs ./node_modules/expo/bin/cli start --android",
+    "ios": "node --require ./scripts/sanitizeMetroHeaders.cjs ./node_modules/expo/bin/cli start --ios",
+    "web": "node --require ./scripts/sanitizeMetroHeaders.cjs ./node_modules/expo/bin/cli start --web",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.29.7",
+    "@react-native/assets-registry": "0.74.87",
+    "@supabase/supabase-js": "^2.112.3",
+    "expo": "~51.0.0",
+    "expo-asset": "~10.0.10",
+    "expo-status-bar": "~1.12.1",
+    "react": "18.2.0",
+    "react-native": "0.74.5",
+    "zustand": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "~18.2.79",
+    "babel-preset-expo": "~11.0.15",
+    "typescript": "~5.3.3"
+  }
+}
