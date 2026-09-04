@@ -4,9 +4,12 @@ import '../../../core/config/app_config.dart';
 import '../../../core/network/api_error.dart';
 import '../../auth/domain/auth_state.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../matching/domain/matching_party.dart';
+import '../../matching/providers/matching_provider.dart';
 import '../data/restaurant_api.dart';
 import '../data/restaurant_repository.dart';
 import '../domain/discovery_filter.dart';
+import '../domain/discovery_party_filter.dart';
 import '../domain/map_camera_center.dart';
 import '../domain/restaurant.dart';
 
@@ -18,6 +21,28 @@ final discoveryFilterProvider =
         (ref) {
   return DiscoveryFilterController(ref);
 });
+
+final discoveryPartyFilterProvider = StateNotifierProvider<
+    DiscoveryPartyFilterController, DiscoveryPartyFilterState>((ref) {
+  return DiscoveryPartyFilterController(ref);
+});
+
+class DiscoveryPartyFilterController
+    extends StateNotifier<DiscoveryPartyFilterState> {
+  DiscoveryPartyFilterController(this._ref)
+      : super(const DiscoveryPartyFilterState());
+
+  final Ref _ref;
+
+  void apply(DiscoveryPartyFilterState filter) {
+    state = filter;
+    _clearSelectedRestaurantIfExcluded(_ref, partyFilter: filter);
+  }
+
+  void reset() {
+    apply(const DiscoveryPartyFilterState());
+  }
+}
 
 class DiscoveryFilterController extends StateNotifier<DiscoveryFilterState> {
   DiscoveryFilterController(this._ref) : super(const DiscoveryFilterState());
@@ -369,7 +394,26 @@ final discoveryCategoriesProvider = Provider<List<String>>((ref) {
 final filteredRestaurantsProvider = Provider<List<Restaurant>>((ref) {
   final filter = ref.watch(discoveryFilterProvider);
   final restaurants = ref.watch(restaurantsProvider);
-  return filterAndSortRestaurants(restaurants, filter);
+  final candidates = filterAndSortRestaurants(restaurants, filter);
+  final partyFilter = ref.watch(discoveryPartyFilterProvider);
+  if (!partyFilter.isActive) return candidates;
+  final restaurantIds = ref.watch(partyFilteredRestaurantIdsProvider);
+  return candidates
+      .where((restaurant) => restaurantIds.contains(restaurant.id))
+      .toList(growable: false);
+});
+
+final visiblePartyPostsProvider = Provider<List<MatchingParty>>((ref) {
+  final filter = ref.watch(discoveryPartyFilterProvider);
+  final parties = ref.watch(matchingPartiesProvider).valueOrNull ?? const [];
+  return filterDiscoveryParties(parties, filter);
+});
+
+final partyFilteredRestaurantIdsProvider = Provider<Set<String>>((ref) {
+  return ref
+      .watch(visiblePartyPostsProvider)
+      .map((party) => party.restaurantId)
+      .toSet();
 });
 
 final selectedRestaurantProvider = Provider<Restaurant?>((ref) {
@@ -385,6 +429,7 @@ final selectedRestaurantProvider = Provider<Restaurant?>((ref) {
 void _clearSelectedRestaurantIfExcluded(
   Ref ref, {
   DiscoveryFilterState? filter,
+  DiscoveryPartyFilterState? partyFilter,
 }) {
   final selectedId = ref.read(selectedRestaurantIdProvider);
   if (selectedId == null) return;
@@ -392,7 +437,26 @@ void _clearSelectedRestaurantIfExcluded(
     ref.read(restaurantsProvider),
     filter ?? ref.read(discoveryFilterProvider),
   );
-  if (filtered.any((restaurant) => restaurant.id == selectedId)) return;
+  final DiscoveryPartyFilterState appliedPartyFilter;
+  if (partyFilter != null) {
+    appliedPartyFilter = partyFilter;
+  } else {
+    appliedPartyFilter = ref.read(discoveryPartyFilterProvider);
+  }
+  final partyRestaurantIds = appliedPartyFilter.isActive
+      ? filterDiscoveryParties(
+          ref.read(matchingPartiesProvider).valueOrNull ?? const [],
+          appliedPartyFilter,
+        ).map((party) => party.restaurantId).toSet()
+      : null;
+  if (filtered.any(
+    (restaurant) =>
+        restaurant.id == selectedId &&
+        (partyRestaurantIds == null ||
+            partyRestaurantIds.contains(restaurant.id)),
+  )) {
+    return;
+  }
   ref.read(selectedRestaurantIdProvider.notifier).state = null;
 }
 

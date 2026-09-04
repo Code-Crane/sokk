@@ -11,11 +11,13 @@ import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
 import '../../matching/providers/matching_provider.dart';
 import '../domain/discovery_filter.dart';
+import '../domain/discovery_party_filter.dart';
 import '../domain/restaurant.dart';
 import '../domain/restaurant_map_marker.dart';
 import '../providers/discovery_location_provider.dart';
 import '../providers/discovery_provider.dart';
 import 'map/restaurant_map_view.dart';
+import 'discovery_party_filter_sheet.dart';
 import 'restaurant_bottom_sheet.dart';
 import 'search_this_area_button.dart';
 
@@ -28,6 +30,7 @@ const discoverySortButtonKey = Key('discovery-sort-button');
 const favoritesOnlyFilterKey = Key('favorites-only-filter');
 const activePartyOnlyFilterKey = Key('active-party-only-filter');
 const clearDiscoveryFiltersKey = Key('clear-discovery-filters');
+const discoveryPartyFilterButtonKey = Key('discovery-party-filter-button');
 
 Key discoverySortOptionKey(RestaurantSortOption option) =>
     ValueKey('discovery-sort-${option.name}');
@@ -40,6 +43,7 @@ class DiscoveryScreen extends ConsumerWidget {
     final tokens = context.tokens;
     final categories = ref.watch(discoveryCategoriesProvider);
     final filter = ref.watch(discoveryFilterProvider);
+    final partyFilter = ref.watch(discoveryPartyFilterProvider);
     final rawRestaurants = ref.watch(restaurantsProvider);
     final restaurants = ref.watch(filteredRestaurantsProvider);
     final selectedRestaurant = ref.watch(selectedRestaurantProvider);
@@ -95,6 +99,20 @@ class DiscoveryScreen extends ConsumerWidget {
               ref.read(discoveryFilterProvider.notifier).toggleActivePartyOnly,
           onClear: ref.read(discoveryFilterProvider.notifier).clearCriteria,
         ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: discoveryPartyFilterButtonKey,
+            onPressed: () => _openPartyFilters(context, ref, partyFilter),
+            icon: const Icon(Icons.event_available_outlined, size: 19),
+            label: Text(
+              partyFilter.activeCount == 0
+                  ? '모임 조건'
+                  : '모임 조건 ${partyFilter.activeCount}',
+            ),
+          ),
+        ),
         const SizedBox(height: 12),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -125,6 +143,7 @@ class DiscoveryScreen extends ConsumerWidget {
               rawCount: rawRestaurants.length,
               filteredCount: restaurants.length,
               filter: filter,
+              hasPartyFilter: partyFilter.isActive,
               isNearbyMode: isNearbyMode,
             );
             return _RestaurantFeedStatus(
@@ -189,6 +208,7 @@ class DiscoveryScreen extends ConsumerWidget {
               _emptyStateMessage(
                 rawRestaurants: rawRestaurants,
                 filter: filter,
+                partyFilter: partyFilter,
                 isNearbyMode: isNearbyMode,
               ),
               style: Theme.of(context).textTheme.bodyMedium,
@@ -197,6 +217,19 @@ class DiscoveryScreen extends ConsumerWidget {
       ],
     );
   }
+}
+
+Future<void> _openPartyFilters(
+  BuildContext context,
+  WidgetRef ref,
+  DiscoveryPartyFilterState current,
+) async {
+  final next = await showDiscoveryPartyFilterSheet(
+    context,
+    initialFilter: current,
+  );
+  if (next == null || !context.mounted) return;
+  ref.read(discoveryPartyFilterProvider.notifier).apply(next);
 }
 
 class _DiscoveryQuickFilters extends StatelessWidget {
@@ -378,12 +411,15 @@ String _resultStatusMessage({
   required int rawCount,
   required int filteredCount,
   required DiscoveryFilterState filter,
+  required bool hasPartyFilter,
   required bool isNearbyMode,
 }) {
   if (rawCount == 0) {
     return isNearbyMode ? '현재 위치 5km 안에 등록된 식당이 없어요.' : '현재 지역에 등록된 식당이 없어요.';
   }
-  if (filter.isActive) return '전체 $rawCount곳 중 $filteredCount곳';
+  if (filter.isActive || hasPartyFilter) {
+    return '전체 $rawCount곳 중 $filteredCount곳';
+  }
   return isNearbyMode
       ? '현재 위치 5km 안의 식당 $filteredCount곳을 불러왔어요.'
       : '식당 $filteredCount곳을 불러왔어요.';
@@ -392,10 +428,15 @@ String _resultStatusMessage({
 String _emptyStateMessage({
   required List<Restaurant> rawRestaurants,
   required DiscoveryFilterState filter,
+  required DiscoveryPartyFilterState partyFilter,
   required bool isNearbyMode,
 }) {
   if (rawRestaurants.isEmpty) {
     return isNearbyMode ? '현재 위치 5km 안에 등록된 식당이 없어요.' : '현재 지역에 등록된 식당이 없어요.';
+  }
+
+  if (partyFilter.isActive) {
+    return '조건에 맞는 모임이 있는 식당이 없어요.';
   }
 
   final query = filter.query.trim();
