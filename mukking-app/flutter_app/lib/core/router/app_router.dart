@@ -64,7 +64,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.chat,
             pageBuilder: (context, state) {
-              return const NoTransitionPage(child: ChatScreen());
+              return NoTransitionPage(
+                child: ChatScreen(
+                  roomId: state.uri.queryParameters['roomId'],
+                ),
+              );
             },
           ),
           GoRoute(
@@ -78,7 +82,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             pageBuilder: (context, state) {
               final partyId = state.pathParameters['partyId'] ?? '';
               return MaterialPage(
-                child: PartyDetailScreen(partyId: partyId),
+                child: PartyDetailScreen(
+                  partyId: partyId,
+                  returnPath: state.uri.queryParameters['returnTo'],
+                ),
               );
             },
           ),

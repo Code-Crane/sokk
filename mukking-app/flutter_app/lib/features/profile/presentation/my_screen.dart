@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/network/api_error.dart';
+import '../../../core/router/app_routes.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
 import '../../../widgets/xp_progress_bar.dart';
@@ -10,9 +12,20 @@ import '../../auth/domain/auth_user.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/presentation/auth_placeholder_screen.dart';
 import '../../discovery/providers/discovery_provider.dart';
+import '../../matching/domain/matching_party.dart';
+import '../../matching/providers/matching_provider.dart';
 import '../../settings/presentation/theme_selector.dart';
 import '../providers/profile_provider.dart';
 import '../providers/verification_action_provider.dart';
+
+const myPartiesCardKey = Key('my-parties-card');
+const myPartiesCreateButtonKey = Key('my-parties-create-button');
+
+Key myAuthoredPartyKey(String partyId) =>
+    ValueKey('my-authored-party-$partyId');
+
+Key myConfirmedPartyKey(String partyId) =>
+    ValueKey('my-confirmed-party-$partyId');
 
 class MyScreen extends ConsumerWidget {
   const MyScreen({super.key});
@@ -39,6 +52,7 @@ class MyScreen extends ConsumerWidget {
 
     final favoriteRestaurants = ref.watch(favoriteRestaurantsProvider);
     final profile = ref.watch(profileSummaryProvider);
+    final myParties = ref.watch(myPartyOverviewProvider);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -203,6 +217,8 @@ class MyScreen extends ConsumerWidget {
           error: (_, __) => const SizedBox.shrink(),
         ),
         const SizedBox(height: 16),
+        MyPartiesSection(parties: myParties),
+        const SizedBox(height: 16),
         MukkingCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -315,6 +331,137 @@ class MyScreen extends ConsumerWidget {
         const SnackBar(content: Text('테스트 인증이 완료됐어요.')),
       );
     }
+  }
+}
+
+class MyPartiesSection extends StatelessWidget {
+  const MyPartiesSection({required this.parties, super.key});
+
+  final AsyncValue<MyPartyOverview> parties;
+
+  @override
+  Widget build(BuildContext context) {
+    return MukkingCard(
+      key: myPartiesCardKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('내 모임', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 12),
+          parties.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (_, __) => const Text('내 모임을 불러오지 못했어요.'),
+            data: (overview) {
+              if (overview.authored.isEmpty && overview.confirmed.isEmpty) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '첫 모임을 만들어보세요.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      key: myPartiesCreateButtonKey,
+                      onPressed: () => context.go(AppRoutes.createParty),
+                      icon: const Icon(Icons.add_circle_outline_rounded),
+                      label: const Text('모임 만들기'),
+                    ),
+                  ],
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (overview.authored.isNotEmpty) ...[
+                    Text(
+                      '내가 만든 모임',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    for (final party in overview.authored)
+                      _MyPartyRow(
+                        key: myAuthoredPartyKey(party.id),
+                        party: party,
+                      ),
+                  ],
+                  if (overview.authored.isNotEmpty &&
+                      overview.confirmed.isNotEmpty)
+                    const SizedBox(height: 12),
+                  if (overview.confirmed.isNotEmpty) ...[
+                    Text(
+                      '참여 확정',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    for (final party in overview.confirmed)
+                      _MyPartyRow(
+                        key: myConfirmedPartyKey(party.id),
+                        party: party,
+                      ),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MyPartyRow extends StatelessWidget {
+  const _MyPartyRow({required this.party, super.key});
+
+  final MatchingParty party;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    return InkWell(
+      onTap: () => context.push(AppRoutes.partyDetailPath(party.id)),
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+        child: Row(
+          children: [
+            Icon(Icons.groups_rounded, color: tokens.primary, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    party.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${party.scheduledLabel} · ${party.memberLabel}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              party.status.label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: tokens.primary,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.chevron_right_rounded, size: 20),
+          ],
+        ),
+      ),
+    );
   }
 }
 

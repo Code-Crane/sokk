@@ -11,7 +11,17 @@ class AppRoutes {
   static const restaurants = '/restaurants';
   static const restaurantDetail = '$restaurants/:restaurantId';
 
-  static String partyDetailPath(String partyId) => '/party/$partyId';
+  static String partyDetailPath(String partyId, {String? returnTo}) {
+    return Uri(
+      path: '/party/$partyId',
+      queryParameters: returnTo == null ? null : {'returnTo': returnTo},
+    ).toString();
+  }
+
+  static String chatPath(String roomId) => Uri(
+        path: chat,
+        queryParameters: {'roomId': roomId},
+      ).toString();
 
   static String restaurantDetailPath(String restaurantId) =>
       '$restaurants/${Uri.encodeComponent(restaurantId)}';

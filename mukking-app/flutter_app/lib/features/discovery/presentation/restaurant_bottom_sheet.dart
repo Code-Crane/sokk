@@ -6,6 +6,7 @@ import '../../../core/router/app_routes.dart';
 import '../../../core/platform/external_url_launcher.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
+import '../../matching/domain/matching_party.dart';
 import '../../matching/providers/matching_provider.dart';
 import '../domain/restaurant.dart';
 import '../providers/discovery_provider.dart';
@@ -74,7 +75,14 @@ class RestaurantBottomSheet extends ConsumerWidget {
     final tokens = context.tokens;
     final partiesAsync = ref.watch(partiesByRestaurantProvider(restaurant.id));
     final parties = partiesAsync.valueOrNull ?? const [];
-    final firstParty = parties.isEmpty ? null : parties.first;
+    final activeParties = parties
+        .where(
+          (party) =>
+              party.status != MatchingPartyStatus.full &&
+              party.hasAvailableSeat,
+        )
+        .toList();
+    final firstParty = activeParties.isEmpty ? null : activeParties.first;
     final phone = restaurant.phone?.trim();
     final placeUri = restaurant.placeUri;
 
@@ -165,7 +173,7 @@ class RestaurantBottomSheet extends ConsumerWidget {
                     const SizedBox(height: 6),
                     partiesAsync.when(
                       data: (_) => Text(
-                        '현재 모집 중 파티 ${restaurant.activePartyCount}개',
+                        '현재 모집 중 파티 ${activeParties.length}개',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: tokens.primary,
                               fontWeight: FontWeight.w800,
@@ -244,14 +252,16 @@ class RestaurantBottomSheet extends ConsumerWidget {
               ),
               _ActionChipButton(
                 icon: Icons.groups_rounded,
-                label: '파티 보기',
+                label: firstParty == null
+                    ? '모집 중인 파티 없음'
+                    : '모집 중 파티 ${activeParties.length}개 보기',
                 color: tokens.partyHot,
                 onTap: firstParty == null
                     ? null
                     : () {
+                        context.push(AppRoutes.partyDetailPath(firstParty.id));
                         ref.read(selectedPartyIdProvider.notifier).state =
                             firstParty.id;
-                        context.push(AppRoutes.partyDetailPath(firstParty.id));
                       },
               ),
               _ActionChipButton(

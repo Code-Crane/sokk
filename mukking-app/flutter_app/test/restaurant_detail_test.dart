@@ -57,7 +57,10 @@ void main() {
     expect(find.text('부산 중구 테스트로 1'), findsOneWidget);
     expect(find.text('051-123-4567'), findsOneWidget);
     expect(find.text('1.4km'), findsOneWidget);
+    expect(find.text('모집 중인 모임'), findsOneWidget);
     expect(find.text('현재 모집 중 1개'), findsOneWidget);
+    expect(find.text('남은 자리 2'), findsOneWidget);
+    expect(find.text('모임 상세 보기'), findsOneWidget);
     expect(find.byKey(restaurantDetailPartyCardKey('party-matching')),
         findsOneWidget);
     expect(find.text('party-other'), findsNothing);
@@ -110,7 +113,7 @@ void main() {
     expect(find.text('부산 중구 지번 2'), findsOneWidget);
     expect(find.byKey(restaurantDetailPhoneButtonKey), findsNothing);
     expect(find.byKey(restaurantDetailPlaceButtonKey), findsNothing);
-    expect(find.text('아직 모집 중인 파티가 없어요.'), findsOneWidget);
+    expect(find.text('현재 모집 중인 모임이 없어요.'), findsOneWidget);
   });
 
   testWidgets('party and create actions keep their restaurant identifiers',
@@ -131,18 +134,21 @@ void main() {
       find.byKey(restaurantDetailPartyCardKey('party-route')),
     );
     await tester.pumpAndSettle();
-    tester
-        .widget<InkWell>(
-          find.byKey(restaurantDetailPartyCardKey('party-route')),
-        )
-        .onTap!();
-    expect(container.read(selectedPartyIdProvider), 'party-route');
+    await tester.tap(
+      find.byKey(restaurantDetailPartyCardKey('party-route')),
+    );
     await tester.pumpAndSettle();
+    expect(container.read(selectedPartyIdProvider), 'party-route');
     expect(router.routerDelegate.currentConfiguration.uri.path,
         AppRoutes.partyDetailPath('party-route'));
 
-    router.go(AppRoutes.restaurantDetailPath('restaurant-detail'));
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
+    expect(
+      router.routerDelegate.currentConfiguration.uri.path,
+      AppRoutes.restaurantDetailPath('restaurant-detail'),
+    );
+
     await tester.ensureVisible(
       find.byKey(restaurantDetailCreatePartyButtonKey),
     );
@@ -365,6 +371,9 @@ class _MatchingRepository implements MatchingRepository {
     }
     return null;
   }
+
+  @override
+  Future<PartyJoinRequest?> findMyJoinRequest(String partyId) async => null;
 
   @override
   Future<List<PartyJoinRequest>> listJoinRequests(String partyId) async =>

@@ -20,6 +20,7 @@ import 'package:mukking_flutter_app/features/discovery/presentation/restaurant_b
 import 'package:mukking_flutter_app/features/home/providers/home_provider.dart';
 import 'package:mukking_flutter_app/features/matching/providers/matching_provider.dart';
 import 'package:mukking_flutter_app/features/matching/data/matching_api.dart';
+import 'package:mukking_flutter_app/features/matching/domain/matching_party.dart';
 import 'package:mukking_flutter_app/features/notifications/data/notification_api.dart';
 import 'package:mukking_flutter_app/features/notifications/data/notification_repository.dart';
 import 'package:mukking_flutter_app/features/notifications/providers/notification_provider.dart';
@@ -197,7 +198,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(of: details, matching: find.text('파티 보기')),
+      find.descendant(of: details, matching: find.text('모집 중인 파티 없음')),
       findsOneWidget,
     );
     expect(
@@ -488,10 +489,10 @@ void main() {
     expect(parties, isNotEmpty);
 
     final result = await container
-        .read(joinPartyControllerProvider.notifier)
+        .read(joinPartyControllerProvider(parties.first.id).notifier)
         .join(parties.first.id);
 
-    expect(result?.status, 'pending');
+    expect(result?.status, MatchingJoinRequestStatus.pending);
   });
 
   test('mock chat fallback exposes rooms and messages', () async {

@@ -35,6 +35,13 @@ class MatchingApi {
         .toList();
   }
 
+  Future<JoinRequestDto?> getMyJoinRequest(String postId) async {
+    final json = await _apiClient.getNullableMap(
+      ApiEndpoints.myJoinRequest(postId),
+    );
+    return json == null ? null : JoinRequestDto.fromJson(json);
+  }
+
   Future<RespondJoinRequestDto> respondJoinRequest({
     required String requestId,
     required String decision,

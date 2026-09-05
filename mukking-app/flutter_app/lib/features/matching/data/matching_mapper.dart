@@ -50,6 +50,9 @@ class MatchingPostMapper {
       ],
       tags: ['실제API', post.status],
       description: post.intro,
+      restaurantName: post.restaurantName,
+      address: post.address,
+      participantIds: post.participantIds,
     );
   }
 

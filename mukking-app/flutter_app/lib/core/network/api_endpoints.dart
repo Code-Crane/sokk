@@ -32,6 +32,10 @@ class ApiEndpoints {
     return '/api/matching/posts/$postId/requests';
   }
 
+  static String myJoinRequest(String postId) {
+    return '/api/matching/posts/$postId/request/me';
+  }
+
   static String respondJoinRequest(String requestId) {
     return '/api/matching/requests/$requestId/respond';
   }

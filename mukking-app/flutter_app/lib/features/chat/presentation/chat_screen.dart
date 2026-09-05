@@ -8,7 +8,9 @@ import '../domain/chat_message.dart';
 import '../providers/chat_provider.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
-  const ChatScreen({super.key});
+  const ChatScreen({this.roomId, super.key});
+
+  final String? roomId;
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -27,7 +29,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Widget build(BuildContext context) {
     final tokens = context.tokens;
     final rooms = ref.watch(chatRoomsProvider);
-    final selectedRoom = ref.watch(selectedChatRoomProvider);
+    final selectedRoom = widget.roomId == null
+        ? ref.watch(selectedChatRoomProvider)
+        : ref.watch(chatRoomByIdProvider(widget.roomId!));
 
     return Column(
       children: [

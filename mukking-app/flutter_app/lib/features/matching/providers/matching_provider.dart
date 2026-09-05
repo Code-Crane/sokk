@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_error.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../chat/providers/chat_provider.dart';
+import '../../chat/domain/chat_room.dart';
 import '../../discovery/domain/restaurant.dart';
 import '../../discovery/providers/discovery_provider.dart';
 import '../data/matching_repository.dart';
@@ -56,20 +58,59 @@ final partiesByRestaurantProvider =
       .toList();
 });
 
+class MyPartyOverview {
+  const MyPartyOverview({
+    required this.authored,
+    required this.confirmed,
+  });
+
+  final List<MatchingParty> authored;
+  final List<MatchingParty> confirmed;
+}
+
+final myPartyOverviewProvider = FutureProvider<MyPartyOverview>((ref) async {
+  final userId = ref.watch(currentUserProvider)?.id;
+  if (userId == null) {
+    return const MyPartyOverview(authored: [], confirmed: []);
+  }
+
+  final parties = await ref.watch(matchingPartiesProvider.future);
+  return MyPartyOverview(
+    authored: [
+      for (final party in parties)
+        if (party.hostUserId == userId) party
+    ],
+    confirmed: [
+      for (final party in parties)
+        if (party.hostUserId != userId && party.isParticipant(userId)) party,
+    ],
+  );
+});
+
 final partyJoinRequestsProvider =
     FutureProvider.family<List<PartyJoinRequest>, String>((ref, partyId) {
   return ref.watch(matchingRepositoryProvider).listJoinRequests(partyId);
 });
 
+typedef MyJoinRequestKey = ({String partyId, String userId});
+
+final myJoinRequestProvider =
+    FutureProvider.family<PartyJoinRequest?, MyJoinRequestKey>((ref, key) {
+  return ref.watch(matchingRepositoryProvider).findMyJoinRequest(key.partyId);
+});
+
+typedef RespondJoinRequestKey = ({String partyId, String requestId});
+
 final respondJoinRequestControllerProvider = StateNotifierProvider.family<
     RespondJoinRequestController,
     AsyncValue<RespondJoinRequestResult?>,
-    String>((ref, partyId) {
+    RespondJoinRequestKey>((ref, key) {
   return RespondJoinRequestController(
     ref.watch(matchingRepositoryProvider),
     onResponded: () {
-      ref.invalidate(partyJoinRequestsProvider(partyId));
+      ref.invalidate(partyJoinRequestsProvider(key.partyId));
       ref.invalidate(matchingFeedProvider);
+      ref.invalidate(partyByIdProvider(key.partyId));
       ref.invalidate(chatRoomsProvider);
     },
   );
@@ -90,6 +131,7 @@ class RespondJoinRequestController
     required String requestId,
     required String decision,
   }) async {
+    if (state.isLoading) return null;
     state = const AsyncValue.loading();
     try {
       final result = await _repository.respondJoinRequest(
@@ -106,10 +148,31 @@ class RespondJoinRequestController
   }
 }
 
-final joinPartyControllerProvider =
-    StateNotifierProvider<JoinPartyController, AsyncValue<JoinRequestResult?>>(
-        (ref) {
-  return JoinPartyController(ref.watch(matchingRepositoryProvider));
+final joinPartyControllerProvider = StateNotifierProvider.family<
+    JoinPartyController,
+    AsyncValue<JoinRequestResult?>,
+    String>((ref, partyId) {
+  final userId = ref.watch(currentUserProvider)?.id;
+  return JoinPartyController(
+    ref.watch(matchingRepositoryProvider),
+    onJoined: () {
+      ref.invalidate(partyByIdProvider(partyId));
+      if (userId != null) {
+        ref.invalidate(
+          myJoinRequestProvider((partyId: partyId, userId: userId)),
+        );
+      }
+    },
+  );
+});
+
+final chatRoomForPartyProvider =
+    FutureProvider.family<ChatRoom?, String>((ref, partyId) async {
+  final rooms = await ref.watch(chatRoomsProvider.future);
+  for (final room in rooms) {
+    if (room.postId == partyId) return room;
+  }
+  return null;
 });
 
 final createPartyControllerProvider =
@@ -150,14 +213,21 @@ class CreatePartyController extends StateNotifier<AsyncValue<MatchingParty?>> {
 
 class JoinPartyController
     extends StateNotifier<AsyncValue<JoinRequestResult?>> {
-  JoinPartyController(this._repository) : super(const AsyncValue.data(null));
+  JoinPartyController(
+    this._repository, {
+    required void Function() onJoined,
+  })  : _onJoined = onJoined,
+        super(const AsyncValue.data(null));
 
   final MatchingRepository _repository;
+  final void Function() _onJoined;
 
   Future<JoinRequestResult?> join(String partyId) async {
+    if (state.isLoading) return null;
     state = const AsyncValue.loading();
     try {
       final result = await _repository.createJoinRequest(partyId);
+      _onJoined();
       state = AsyncValue.data(result);
       return result;
     } on ApiError catch (error, stackTrace) {

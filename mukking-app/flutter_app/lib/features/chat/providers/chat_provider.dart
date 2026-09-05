@@ -23,6 +23,15 @@ final selectedChatRoomProvider = FutureProvider<ChatRoom?>((ref) async {
   );
 });
 
+final chatRoomByIdProvider =
+    FutureProvider.family<ChatRoom?, String>((ref, roomId) async {
+  final rooms = await ref.watch(chatRoomsProvider.future);
+  for (final room in rooms) {
+    if (room.id == roomId) return room;
+  }
+  return null;
+});
+
 final chatMessagesProvider =
     FutureProvider.family<List<ChatMessage>, String>((ref, roomId) {
   return ref.watch(chatRepositoryProvider).listMessages(roomId);

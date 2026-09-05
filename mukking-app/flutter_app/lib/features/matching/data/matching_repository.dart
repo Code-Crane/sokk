@@ -26,7 +26,7 @@ class JoinRequestResult {
   });
 
   final String requestId;
-  final String status;
+  final MatchingJoinRequestStatus status;
   final String message;
 }
 
@@ -60,10 +60,10 @@ class PartyJoinRequest {
   final String id;
   final String postId;
   final String requesterId;
-  final String status;
+  final MatchingJoinRequestStatus status;
   final DateTime? createdAt;
 
-  bool get isPending => status == 'pending';
+  bool get isPending => status == MatchingJoinRequestStatus.pending;
 
   String get requesterLabel {
     if (requesterId.length <= 8) return requesterId;
@@ -86,6 +86,7 @@ abstract class MatchingRepository {
   Future<MatchingParty?> findPartyById(String partyId);
   Future<MatchingParty> createParty(CreatePartyInput input);
   Future<JoinRequestResult> createJoinRequest(String partyId);
+  Future<PartyJoinRequest?> findMyJoinRequest(String partyId);
   Future<List<PartyJoinRequest>> listJoinRequests(String partyId);
   Future<RespondJoinRequestResult> respondJoinRequest({
     required String requestId,
@@ -146,6 +147,8 @@ class MockMatchingRepository implements MatchingRepository {
       memberNames: const ['나'],
       tags: const ['Mock', 'open'],
       description: input.intro,
+      restaurantName: input.restaurantName,
+      address: input.address,
     );
   }
 
@@ -153,10 +156,13 @@ class MockMatchingRepository implements MatchingRepository {
   Future<JoinRequestResult> createJoinRequest(String partyId) async {
     return JoinRequestResult(
       requestId: 'mock-join-$partyId',
-      status: 'pending',
+      status: MatchingJoinRequestStatus.pending,
       message: 'Mock 참가 요청이 접수됐어요.',
     );
   }
+
+  @override
+  Future<PartyJoinRequest?> findMyJoinRequest(String partyId) async => null;
 
   @override
   Future<List<PartyJoinRequest>> listJoinRequests(String partyId) async {
@@ -165,7 +171,7 @@ class MockMatchingRepository implements MatchingRepository {
         id: 'mock-request-$partyId',
         postId: partyId,
         requesterId: 'mock-requester',
-        status: 'pending',
+        status: MatchingJoinRequestStatus.pending,
         createdAt: DateTime.now(),
       ),
     ];
@@ -181,7 +187,7 @@ class MockMatchingRepository implements MatchingRepository {
         id: requestId,
         postId: 'mock-post',
         requesterId: 'mock-requester',
-        status: decision,
+        status: MatchingJoinRequestStatus.fromWire(decision),
         createdAt: DateTime.now(),
       ),
       chatRoomId: decision == 'accepted' ? 'mock-chat-room' : null,
@@ -236,9 +242,15 @@ class ApiMatchingRepository implements MatchingRepository {
     final dto = await _api.createJoinRequest(partyId);
     return JoinRequestResult(
       requestId: dto.id,
-      status: dto.status,
+      status: MatchingJoinRequestStatus.fromWire(dto.status),
       message: '참가 요청이 접수됐어요. 파티장의 승인을 기다려주세요.',
     );
+  }
+
+  @override
+  Future<PartyJoinRequest?> findMyJoinRequest(String partyId) async {
+    final dto = await _api.getMyJoinRequest(partyId);
+    return dto == null ? null : _toJoinRequest(dto);
   }
 
   @override
@@ -267,7 +279,7 @@ class ApiMatchingRepository implements MatchingRepository {
       id: dto.id,
       postId: dto.postId,
       requesterId: dto.requesterId,
-      status: dto.status,
+      status: MatchingJoinRequestStatus.fromWire(dto.status),
       createdAt: DateTime.tryParse(dto.createdAt)?.toLocal(),
     );
   }

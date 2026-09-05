@@ -36,6 +36,17 @@ class ApiClient {
     return _asMap(response.data);
   }
 
+  Future<Map<String, dynamic>?> getNullableMap(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    final response = await _request(
+      () => _dio.get<Object?>(path, queryParameters: queryParameters),
+    );
+    if (response.data == null) return null;
+    return _asMap(response.data);
+  }
+
   Future<Map<String, dynamic>> postMap(
     String path, {
     Object? data,

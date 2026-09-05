@@ -180,7 +180,10 @@ class _RestaurantDetailContent extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _PartySection(parties: parties),
+                _PartySection(
+                  restaurantId: restaurant.id,
+                  parties: parties,
+                ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   key: restaurantDetailCreatePartyButtonKey,
@@ -273,8 +276,12 @@ class _CategoryHeader extends StatelessWidget {
 }
 
 class _PartySection extends ConsumerWidget {
-  const _PartySection({required this.parties});
+  const _PartySection({
+    required this.restaurantId,
+    required this.parties,
+  });
 
+  final String restaurantId;
   final AsyncValue<List<MatchingParty>> parties;
 
   @override
@@ -284,7 +291,7 @@ class _PartySection extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '이 식당에서 같이 먹어요',
+            '모집 중인 모임',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 14),
@@ -296,11 +303,15 @@ class _PartySection extends ConsumerWidget {
             ),
             data: (items) {
               final active = items
-                  .where((party) => party.status != MatchingPartyStatus.full)
+                  .where(
+                    (party) =>
+                        party.status != MatchingPartyStatus.full &&
+                        party.hasAvailableSeat,
+                  )
                   .toList();
               if (active.isEmpty) {
                 return Text(
-                  '아직 모집 중인 파티가 없어요.',
+                  '현재 모집 중인 모임이 없어요.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 );
               }
@@ -316,7 +327,14 @@ class _PartySection extends ConsumerWidget {
                     _RestaurantPartyCard(
                       party: party,
                       onTap: () {
-                        context.go(AppRoutes.partyDetailPath(party.id));
+                        context.go(
+                          AppRoutes.partyDetailPath(
+                            party.id,
+                            returnTo: AppRoutes.restaurantDetailPath(
+                              restaurantId,
+                            ),
+                          ),
+                        );
                         ref.read(selectedPartyIdProvider.notifier).state =
                             party.id;
                       },
@@ -385,11 +403,44 @@ class _RestaurantPartyCard extends StatelessWidget {
                   icon: Icons.people_alt_rounded,
                   label: party.memberLabel,
                 ),
+                _CompactMeta(
+                  icon: Icons.event_seat_outlined,
+                  label:
+                      '남은 자리 ${(party.maxMembers - party.currentMembers).clamp(0, party.maxMembers)}',
+                ),
                 if (party.hostName.isNotEmpty)
                   _CompactMeta(
                     icon: Icons.person_outline_rounded,
                     label: party.hostName,
                   ),
+              ],
+            ),
+            if (party.description.trim().isNotEmpty &&
+                party.description.trim() != party.title.trim()) ...[
+              const SizedBox(height: 10),
+              Text(
+                party.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Text(
+                  '모임 상세 보기',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: tokens.primary,
+                      ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: tokens.primary,
+                ),
               ],
             ),
           ],
