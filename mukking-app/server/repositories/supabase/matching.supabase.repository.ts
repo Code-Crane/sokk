@@ -208,6 +208,20 @@ export const supabaseMatchingRepository: MatchingRepository = {
     return data ? toJoinRequest(data) : null;
   },
 
+  async findLatestJoinRequestForRequester(postId, requesterId) {
+    const { data, error } = await getSupabaseServiceRoleClient()
+      .from("join_requests")
+      .select("*")
+      .eq("post_id", postId)
+      .eq("requester_id", requesterId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle<JoinRequestRow>();
+    if (error) throwSupabaseError(error);
+    return data ? toJoinRequest(data) : null;
+  },
+
   async listJoinRequestsForPost(postId) {
     const { data, error } = await getSupabaseServiceRoleClient()
       .from("join_requests")

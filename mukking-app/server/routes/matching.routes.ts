@@ -3,6 +3,7 @@ import {
   createJoinRequestController,
   completeMatchingPostController,
   createMatchingPostController,
+  getMyJoinRequestController,
   listJoinRequestsForPostController,
   listMatchingPostsController,
   respondToJoinRequestController
@@ -21,6 +22,11 @@ matchingRoutes.post(
   createJoinRequestController
 );
 matchingRoutes.post("/posts/:postId/complete", authMiddleware, completeMatchingPostController);
+matchingRoutes.get(
+  "/posts/:postId/request/me",
+  authMiddleware,
+  getMyJoinRequestController
+);
 matchingRoutes.get(
   "/posts/:postId/requests",
   authMiddleware,

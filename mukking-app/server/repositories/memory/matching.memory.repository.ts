@@ -147,6 +147,21 @@ export const memoryMatchingRepository: MatchingRepository = {
     );
   },
 
+  async findLatestJoinRequestForRequester(postId, requesterId) {
+    return (
+      Array.from(db.joinRequests.values())
+        .filter(
+          (request) =>
+            request.postId === postId && request.requesterId === requesterId
+        )
+        .sort(
+          (left, right) =>
+            right.createdAt.localeCompare(left.createdAt) ||
+            right.id.localeCompare(left.id)
+        )[0] ?? null
+    );
+  },
+
   async listJoinRequestsForPost(postId) {
     return Array.from(db.joinRequests.values())
       .filter((request) => request.postId === postId)

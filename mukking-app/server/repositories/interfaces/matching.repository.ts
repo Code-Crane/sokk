@@ -48,6 +48,10 @@ export interface MatchingRepository {
     postId: string,
     requesterId: string
   ): Promise<JoinRequest | null>;
+  findLatestJoinRequestForRequester(
+    postId: string,
+    requesterId: string
+  ): Promise<JoinRequest | null>;
   listJoinRequestsForPost(postId: string): Promise<JoinRequest[]>;
   createJoinRequest(postId: string, requesterId: string): Promise<JoinRequest>;
   updateJoinRequestStatus(

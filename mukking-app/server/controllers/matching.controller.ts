@@ -4,6 +4,7 @@ import {
   createJoinRequest,
   completeMatchingPost,
   createMatchingPost,
+  getMyJoinRequest,
   listJoinRequestsForPost,
   listMatchingPosts,
   respondToJoinRequest
@@ -46,6 +47,21 @@ export async function createJoinRequestController(
     response
       .status(201)
       .json(await createJoinRequest(authenticatedRequest.userId, request.params.postId));
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getMyJoinRequestController(
+  request: Request,
+  response: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const authenticatedRequest = request as AuthenticatedRequest;
+    response.json(
+      await getMyJoinRequest(authenticatedRequest.userId, request.params.postId)
+    );
   } catch (error) {
     next(error);
   }

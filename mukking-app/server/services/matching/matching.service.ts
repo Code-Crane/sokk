@@ -131,6 +131,16 @@ export async function listJoinRequestsForPost(
   return repositories.matching.listJoinRequestsForPost(postId);
 }
 
+export async function getMyJoinRequest(
+  requesterId: string,
+  postId: string
+): Promise<JoinRequest | null> {
+  return repositories.matching.findLatestJoinRequestForRequester(
+    postId,
+    requesterId
+  );
+}
+
 export async function respondToJoinRequest(
   authorId: string,
   requestId: string,
