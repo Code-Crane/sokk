@@ -79,7 +79,7 @@ class MockChatRepository implements ChatRepository {
     required String text,
   }) async {
     return ChatMessage(
-      id: 'mock-sent',
+      id: 'mock-sent-${DateTime.now().microsecondsSinceEpoch}',
       roomId: roomId,
       senderId: 'mock-user',
       text: text,
