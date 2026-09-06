@@ -24,6 +24,7 @@
     "cleanup:discovery-parties": "node scripts/discoveryPartySeed.cjs cleanup",
     "audit:matching-join-flow": "node scripts/matchingJoinFlowValidation.cjs audit",
     "seed:matching-join-flow": "node scripts/matchingJoinFlowValidation.cjs seed",
+    "prepare:matching-chat-ux": "node scripts/matchingJoinFlowValidation.cjs prepare-chat",
     "list:matching-join-flow": "node scripts/matchingJoinFlowValidation.cjs list",
     "validate:matching-join-flow": "node scripts/matchingJoinFlowValidation.cjs validate",
     "cleanup:matching-join-flow": "node scripts/matchingJoinFlowValidation.cjs cleanup",

@@ -183,6 +183,30 @@ async function cleanup(client) {
   }
   const roomIds = (rooms.data ?? []).map((room) => room.id);
 
+  let deletedReports = 0;
+  let deletedBlocks = 0;
+  if (roomIds.length > 0) {
+    const reports = await client
+      .from("reports")
+      .select("id")
+      .in("chat_room_id", roomIds);
+    if (reports.error) throw reports.error;
+    const reportIds = (reports.data ?? []).map((report) => report.id);
+    await deleteRows(client, "report_events", "report_id", reportIds);
+    await deleteRows(client, "reports", "id", reportIds);
+    deletedReports = reportIds.length;
+
+    const blocks = await client
+      .from("blocks")
+      .select("id")
+      .eq("scope", "chat")
+      .in("reason", roomIds.map((roomId) => `chat_room:${roomId}`));
+    if (blocks.error) throw blocks.error;
+    const blockIds = (blocks.data ?? []).map((block) => block.id);
+    await deleteRows(client, "blocks", "id", blockIds);
+    deletedBlocks = blockIds.length;
+  }
+
   await deleteRows(client, "chat_messages", "room_id", roomIds);
   await deleteRows(client, "chat_room_participants", "room_id", roomIds);
   await deleteRows(client, "chat_rooms", "matching_post_id", postIds);
@@ -196,7 +220,25 @@ async function cleanup(client) {
   if (remaining.length !== 0) {
     throw new Error("Validation party cleanup did not reach zero rows.");
   }
-  console.log(`[JOIN_FLOW] CLEANUP PASS deletedParties=${postIds.length}`);
+  for (const [table, column, ids] of [
+    ["join_requests", "post_id", postIds],
+    ["chat_rooms", "matching_post_id", postIds],
+    ["chat_messages", "room_id", roomIds],
+    ["reports", "chat_room_id", roomIds],
+    ["blocks", "reason", roomIds.map((id) => `chat_room:${id}`)]
+  ]) {
+    if (ids.length === 0) continue;
+    let query = client.from(table).select("id", { count: "exact", head: true }).in(column, ids);
+    if (table === "blocks") query = query.eq("scope", "chat");
+    const result = await query;
+    if (result.error) throw result.error;
+    if (result.count !== 0) throw new Error(`Cleanup left rows in ${table}.`);
+    console.log(`[JOIN_FLOW] CLEANUP VERIFIED ${table}=0`);
+  }
+  console.log(
+    `[JOIN_FLOW] CLEANUP PASS deletedParties=${postIds.length} ` +
+      `deletedReports=${deletedReports} deletedChatBlocks=${deletedBlocks}`
+  );
 }
 
 function tomorrowKst(hour, minute) {
@@ -312,6 +354,69 @@ async function seed(client) {
     }
   ]);
   console.log("[JOIN_FLOW] SEED PASS readyForManualValidation=true");
+  return { accounts, post };
+}
+
+async function prepareChat(client) {
+  const { accounts, post } = await seed(client);
+  const {
+    createJoinRequest,
+    respondToJoinRequest
+  } = require("../dist/server/services/matching/matching.service");
+
+  const request = await createJoinRequest(accounts.participant.user_id, post.id);
+  const accepted = await respondToJoinRequest(accounts.author.user_id, request.id, {
+    decision: "accepted"
+  });
+  if (accepted.request.status !== "accepted" || !accepted.chatRoom) {
+    throw new Error("Join approval did not create an accepted chat room.");
+  }
+
+  const roomsResult = await client
+    .from("chat_rooms")
+    .select("id,matching_post_id,status")
+    .eq("matching_post_id", post.id);
+  if (roomsResult.error) throw roomsResult.error;
+  const rooms = roomsResult.data ?? [];
+  if (rooms.length !== 1) {
+    throw new Error(`Expected exactly one validation chat room, found ${rooms.length}.`);
+  }
+  const room = rooms[0];
+  const participantsResult = await client
+    .from("chat_room_participants")
+    .select("user_id")
+    .eq("room_id", room.id);
+  if (participantsResult.error) throw participantsResult.error;
+  const participantIds = new Set(
+    (participantsResult.data ?? []).map((participant) => participant.user_id)
+  );
+  if (
+    room.id !== accepted.chatRoom.id ||
+    !participantIds.has(accounts.author.user_id) ||
+    !participantIds.has(accounts.participant.user_id)
+  ) {
+    throw new Error("Validation chat room participants do not match test accounts A/B.");
+  }
+
+  const messagesResult = await client
+    .from("chat_messages")
+    .select("id,message_type,sender_id")
+    .eq("room_id", room.id);
+  if (messagesResult.error) throw messagesResult.error;
+  const messages = messagesResult.data ?? [];
+  const userMessages = messages.filter((message) => message.message_type === "user");
+  const systemMessages = messages.filter((message) => message.message_type === "system");
+  if (userMessages.length !== 0 || systemMessages.length !== 1) {
+    throw new Error(
+      `Expected one system message and zero user messages, found system=${systemMessages.length}, user=${userMessages.length}.`
+    );
+  }
+
+  console.log(
+    `[JOIN_FLOW] CHAT_READY partyId=${post.id} roomId=${room.id} ` +
+      `rooms=1 authorIncluded=true participantIncluded=true ` +
+      `systemMessages=${systemMessages.length} userMessages=${userMessages.length}`
+  );
 }
 
 async function fetchMatchingApi() {
@@ -414,17 +519,25 @@ async function main() {
 
   if (command === "audit") return accountAudit(client);
   if (command === "seed") return seed(client);
+  if (command === "prepare-chat") return prepareChat(client);
   if (command === "list") return printPosts("current", await findValidationPosts(client));
   if (command === "validate") return validate(client);
   if (command === "cleanup") return cleanup(client);
   throw new Error(
-    "Usage: matchingJoinFlowValidation.cjs [audit|seed|list|validate|cleanup]"
+    "Usage: matchingJoinFlowValidation.cjs [audit|seed|prepare-chat|list|validate|cleanup]"
   );
 }
 
 main().catch((error) => {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error?.message === "string"
+        ? error.message
+        : "unknown error";
+  const code = typeof error?.code === "string" ? ` code=${error.code}` : "";
   console.error(
-    `[JOIN_FLOW] FAIL ${error instanceof Error ? error.message : "unknown error"}`
+    `[JOIN_FLOW] FAIL ${message}${code}`
   );
   process.exitCode = 1;
 });
