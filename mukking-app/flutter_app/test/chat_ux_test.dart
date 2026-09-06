@@ -76,6 +76,13 @@ class FakeChat extends ChatRepository {
 class FakeSafety extends ChatSafetyRepository {
   FakeSafety() : super(null);
   int reports = 0;
+  bool failUnblock = false;
+  @override
+  Future<void> unblock(String userId) async {
+    if (failUnblock) throw ApiError.fromStatusCode(500);
+    await super.unblock(userId);
+  }
+
   @override
   Future<void> report(
       {required String roomId,
@@ -133,6 +140,56 @@ Future<GoRouter> mount(WidgetTester tester, FakeChat repo,
 }
 
 void main() {
+  test('moderation error uses safe message without exposing server details',
+      () {
+    expect(
+        ApiError.fromStatusCode(403,
+                serverMessage: 'This chat action is blocked by a user block.')
+            .userMessage,
+        '이 사용자와는 상호작용할 수 없어요.');
+    expect(
+        ApiError.fromStatusCode(403,
+                serverMessage: 'This account is restricted from chat.')
+            .userMessage,
+        '현재 이 기능을 사용할 수 없어요.');
+  });
+
+  testWidgets(
+      'unblock failure retains state; retry restores input without message reload',
+      (tester) async {
+    final safety = FakeSafety()..failUnblock = true;
+    await safety.block('other');
+    final chat = FakeChat()..messages = [message('evidence')];
+    await mount(tester, chat, safety: safety);
+    await tester.pumpAndSettle();
+    final fetches = chat.fetches;
+    expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('chat-draft')))
+            .enabled,
+        false);
+    expect(find.byTooltip('이 메시지 신고'), findsOneWidget);
+    await tester.tap(find.text('신고 / 차단'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('차단 해제'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('해제 확인'));
+    await tester.pumpAndSettle();
+    expect(await safety.blockedUsers(), {'other'});
+    safety.failUnblock = false;
+    await tester.tap(find.text('차단 해제'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('해제 확인'));
+    await tester.pumpAndSettle();
+    expect(await safety.blockedUsers(), isEmpty);
+    expect(
+        tester
+            .widget<TextField>(find.byKey(const ValueKey('chat-draft')))
+            .enabled,
+        true);
+    expect(find.text('evidence'), findsOneWidget);
+    expect(chat.fetches, fetches);
+  });
   testWidgets('room-list error is retryable and not empty', (tester) async {
     final repo = FakeChat()..roomFail = true;
     await mount(tester, repo, path: '/chat');
@@ -359,6 +416,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('차단하기'));
     await tester.pumpAndSettle();
+    expect(find.textContaining('모임 참여 신청과 새 메시지'), findsOneWidget);
     expect(await safety.blockedUsers(), isEmpty);
     await tester.tap(find.text('차단 확인'));
     await tester.pumpAndSettle();
@@ -412,6 +470,7 @@ void main() {
           data: options.method == 'GET'
               ? [
                   {'blockedId': 'active', 'scope': 'chat'},
+                  {'blockedId': 'all-active', 'scope': 'all'},
                   {
                     'blockedId': 'expired',
                     'scope': 'all',
@@ -427,7 +486,10 @@ void main() {
               : <String, dynamic>{}));
     }));
     final safety = ChatSafetyRepository(ApiClient(dio));
-    expect(await safety.blockedUsers(), {'active'});
+    expect(await safety.blockedUsers(), {'active', 'all-active'});
+    // A fresh repository reads persisted all/chat scopes rather than local memory.
+    expect(await ChatSafetyRepository(ApiClient(dio)).blockedUsers(),
+        {'active', 'all-active'});
     await safety.report(
         roomId: 'room-real',
         userId: 'user-real',
@@ -441,9 +503,12 @@ void main() {
     expect(requests.last.path, '/api/blocks');
     expect(requests.last.data, {
       'blockedId': 'user-real',
-      'scope': 'chat',
+      'scope': 'all',
       'reason': 'chat_room:room-real',
     });
+    await safety.unblock('user-real');
+    expect(requests.last.method, 'DELETE');
+    expect(requests.last.path, '/api/blocks/user-real');
     dio.close();
   });
 }

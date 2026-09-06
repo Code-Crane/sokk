@@ -126,6 +126,90 @@ async function main() {
     });
     record("chat block enforcement", block.status === 201 && blockedSend.status === 403, `status=${blockedSend.status}`);
 
+    const send = (user) => api(baseUrl, `/api/chat/rooms/${roomId}/messages`, user.token, {
+      method: "POST", body: JSON.stringify({ text: "[TEST] moderation" })
+    });
+    record("blocker also cannot send", (await send(host)).status === 403);
+    const retained = await api(baseUrl, `/api/chat/rooms/${roomId}/messages`, guestA.token);
+    record("blocked participant retains history", retained.status === 200 && retained.payload.length === messages.payload.length);
+    const reportInput = {
+      reportedUserId: host.id, targetType: "chat_message", targetId: firstMessage.payload.id,
+      chatRoomId: roomId, messageId: firstMessage.payload.id, reason: "spam"
+    };
+    const report = await api(baseUrl, "/api/reports", guestA.token, {
+      method: "POST", body: JSON.stringify(reportInput)
+    });
+    record("message report remains available while blocked", report.status === 201);
+    record("unrelated room participant can send", (await send(guestB)).status === 201);
+    await api(baseUrl, `/api/blocks/${guestA.id}`, host.token, { method: "DELETE" });
+    record("unblock restores both directions", (await send(host)).status === 201 && (await send(guestA)).status === 201);
+    await api(baseUrl, "/api/blocks", guestA.token, {
+      method: "POST", body: JSON.stringify({ blockedId: host.id, scope: "chat" })
+    });
+    record("reverse block prevents both send directions", (await send(host)).status === 403 && (await send(guestA)).status === 403);
+    await api(baseUrl, `/api/blocks/${host.id}`, guestA.token, { method: "DELETE" });
+
+    // Audit scoped policy without changing production rules or real accounts.
+    const pendingPost = await api(baseUrl, "/api/matching/posts", host.token, {
+      method: "POST", body: JSON.stringify({ restaurantName: "[TEST] policy", address: "[TEST]",
+        scheduledAt: new Date(Date.now() + 86400000).toISOString(), maxParticipants: 4, intro: "[TEST] policy audit" })
+    });
+    const pendingRequest = await api(baseUrl, `/api/matching/posts/${pendingPost.payload.id}/requests`, outsider.token, { method: "POST" });
+    for (const scope of ["all", "matching", "chat"]) {
+    for (const [blocker, blocked] of [[host, outsider], [outsider, host]]) {
+      await api(baseUrl, "/api/blocks", blocker.token, {
+        method: "POST", body: JSON.stringify({ blockedId: blocked.id, scope })
+      });
+      const join = await api(baseUrl, `/api/matching/posts/${pendingPost.payload.id}/requests`, outsider.token, { method: "POST" });
+      const approval = await api(baseUrl, `/api/matching/requests/${pendingRequest.payload.id}/respond`, host.token, {
+        method: "POST", body: JSON.stringify({ decision: "accepted" })
+      });
+      record(`${scope} join and pending approval policy in either direction`, join.status === (scope === "chat" ? 409 : 403) && approval.status === 403);
+      await api(baseUrl, `/api/blocks/${blocked.id}`, blocker.token, { method: "DELETE" });
+    }
+    }
+    const approvedAfterUnblock = await api(baseUrl, `/api/matching/requests/${pendingRequest.payload.id}/respond`, host.token, {
+      method: "POST", body: JSON.stringify({ decision: "accepted" })
+    });
+    record("pending approval recovers after unblock", approvedAfterUnblock.status === 200);
+    await api(baseUrl, "/api/blocks", host.token, {
+      method: "POST", body: JSON.stringify({ blockedId: outsider.id, scope: "all" })
+    });
+    const recovery = await api(baseUrl, `/api/matching/requests/${pendingRequest.payload.id}/respond`, host.token, {
+      method: "POST", body: JSON.stringify({ decision: "accepted" })
+    });
+    const acceptedRoomId = approvedAfterUnblock.payload.chatRoom.id;
+    const history = await api(baseUrl, `/api/chat/rooms/${acceptedRoomId}/messages`, outsider.token);
+    const allBlockedSend = await api(baseUrl, `/api/chat/rooms/${acceptedRoomId}/messages`, outsider.token, {
+      method: "POST", body: JSON.stringify({ text: "[TEST] all blocked" })
+    });
+    record("all block preserves accepted recovery and history but rejects send",
+      recovery.status === 200 && recovery.payload.chatRoom.id === acceptedRoomId && history.status === 200 && allBlockedSend.status === 403);
+    const blockedReport = await api(baseUrl, "/api/reports", outsider.token, {
+      method: "POST", body: JSON.stringify({ reportedUserId: host.id, targetType: "chat_room", targetId: acceptedRoomId, chatRoomId: acceptedRoomId, reason: "spam" })
+    });
+    record("all block preserves report access", blockedReport.status === 201);
+    await api(baseUrl, `/api/blocks/${outsider.id}`, host.token, { method: "DELETE" });
+    const allRestored = await api(baseUrl, `/api/chat/rooms/${acceptedRoomId}/messages`, outsider.token, {
+      method: "POST", body: JSON.stringify({ text: "[TEST] unblocked" })
+    });
+    record("all unblock restores send", allRestored.status === 201);
+    for (const type of ["temporary_suspension", "permanent_ban"]) {
+      const restriction = await repositories.sanctions.createSanction("memory-admin", {
+        userId: outsider.id, type, reason: "[TEST] moderation regression"
+      });
+      const create = await api(baseUrl, "/api/matching/posts", outsider.token, {
+        method: "POST", body: JSON.stringify({ restaurantName: "[TEST]", address: "[TEST]",
+          scheduledAt: new Date(Date.now() + 86400000).toISOString(), maxParticipants: 4, intro: "[TEST]" })
+      });
+      const join = await api(baseUrl, `/api/matching/posts/${pendingPost.payload.id}/requests`, outsider.token, { method: "POST" });
+      const chat = await api(baseUrl, `/api/chat/rooms/${approvedAfterUnblock.payload.chatRoom.id}/messages`, outsider.token, {
+        method: "POST", body: JSON.stringify({ text: "[TEST] restricted" })
+      });
+      record(`${type} blocks create/join/send`, create.status === 403 && join.status === 403 && chat.status === 403);
+      await repositories.sanctions.revokeSanction("memory-admin", restriction.id);
+    }
+
     const sanction = await repositories.sanctions.createSanction("memory-admin", {
       userId: guestB.id,
       type: "chat_suspension",

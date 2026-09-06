@@ -180,6 +180,7 @@ export async function respondToJoinRequest(
       });
     }
 
+    await assertNoActiveBlockBetween(authorId, request.requesterId, "matching");
     await assertNoActiveBlockBetween(authorId, request.requesterId, "chat");
   } else if (request.status !== "pending") {
     throw Object.assign(new Error("This join request has already been handled."), {

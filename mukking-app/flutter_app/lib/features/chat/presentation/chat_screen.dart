@@ -265,8 +265,16 @@ class _RoomState extends ConsumerState<_Room> {
               Align(
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
-                    onPressed: () => showChatSafetyDialog(context,
-                        room: room, currentUserId: currentUserId),
+                    onPressed: () async {
+                      final unblocked = await showChatSafetyDialog(context,
+                          room: room, currentUserId: currentUserId);
+                      if (mounted && unblocked == true) {
+                        setState(() {
+                          _forbidden = false;
+                          _sendError = null;
+                        });
+                      }
+                    },
                     icon: const Icon(Icons.more_horiz),
                     label: const Text('신고 / 차단'),
                   )),
