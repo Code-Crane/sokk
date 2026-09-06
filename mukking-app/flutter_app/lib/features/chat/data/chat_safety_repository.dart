@@ -44,9 +44,17 @@ class ChatSafetyRepository {
     }
     await client!.postMap('/api/blocks', data: {
       'blockedId': userId,
-      'scope': 'chat',
+      'scope': 'all',
       if (roomId != null) 'reason': 'chat_room:$roomId',
     });
+  }
+
+  Future<void> unblock(String userId) async {
+    if (client == null) {
+      _mockBlocked.remove(userId);
+      return;
+    }
+    await client!.deleteMap('/api/blocks/${Uri.encodeComponent(userId)}');
   }
 
   Future<void> report({

@@ -199,7 +199,7 @@ async function cleanup(client) {
     const blocks = await client
       .from("blocks")
       .select("id")
-      .eq("scope", "chat")
+      .in("scope", ["chat", "all"])
       .in("reason", roomIds.map((roomId) => `chat_room:${roomId}`));
     if (blocks.error) throw blocks.error;
     const blockIds = (blocks.data ?? []).map((block) => block.id);
@@ -229,7 +229,7 @@ async function cleanup(client) {
   ]) {
     if (ids.length === 0) continue;
     let query = client.from(table).select("id", { count: "exact", head: true }).in(column, ids);
-    if (table === "blocks") query = query.eq("scope", "chat");
+    if (table === "blocks") query = query.in("scope", ["chat", "all"]);
     const result = await query;
     if (result.error) throw result.error;
     if (result.count !== 0) throw new Error(`Cleanup left rows in ${table}.`);

@@ -6,13 +6,13 @@ import '../data/chat_safety_repository.dart';
 import '../domain/chat_message.dart';
 import '../domain/chat_room.dart';
 
-Future<void> showChatSafetyDialog(
+Future<bool?> showChatSafetyDialog(
   BuildContext context, {
   required ChatRoom room,
   required String currentUserId,
   ChatMessage? message,
 }) =>
-    showDialog<void>(
+    showDialog<bool>(
         context: context,
         builder: (_) => _SafetyDialog(
             room: room, currentUserId: currentUserId, message: message));
@@ -51,23 +51,32 @@ class _SafetyDialogState extends ConsumerState<_SafetyDialog> {
 
   Future<void> _submit({required bool block}) async {
     if (_busy || _target == null) return;
+    final unblock = block &&
+        (ref.read(chatBlockedUsersProvider).valueOrNull?.contains(_target) ??
+            false);
+    setState(() => _busy = true);
     if (block) {
       final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-                title: const Text('참여자를 차단할까요?'),
-                content:
-                    const Text('이 참여자가 있는 채팅방에서는 메시지를 보낼 수 없어요. 기존 대화는 유지돼요.'),
+                title: Text(unblock ? '차단을 해제할까요?' : '참여자를 차단할까요?'),
+                content: Text(unblock
+                    ? '이 사용자에게 설정한 차단을 해제해요. 상대방의 차단이나 다른 이용 제한은 유지돼요.'
+                    : '이 사용자를 차단하면 모임 참여 신청과 새 메시지 등 상호작용이 제한됩니다. 기존 대화와 신고 기능은 유지돼요.'),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(context, false),
                       child: const Text('취소')),
                   FilledButton(
                       onPressed: () => Navigator.pop(context, true),
-                      child: const Text('차단 확인'))
+                      child: Text(unblock ? '해제 확인' : '차단 확인'))
                 ],
               ));
-      if (confirmed != true || !mounted) return;
+      if (!mounted) return;
+      if (confirmed != true) {
+        setState(() => _busy = false);
+        return;
+      }
     }
     setState(() {
       _busy = true;
@@ -76,7 +85,11 @@ class _SafetyDialogState extends ConsumerState<_SafetyDialog> {
     try {
       final repository = ref.read(chatSafetyRepositoryProvider);
       if (block) {
-        await repository.block(_target!, roomId: widget.room.id);
+        if (unblock) {
+          await repository.unblock(_target!);
+        } else {
+          await repository.block(_target!, roomId: widget.room.id);
+        }
       } else {
         await repository.report(
             roomId: widget.room.id,
@@ -87,9 +100,13 @@ class _SafetyDialogState extends ConsumerState<_SafetyDialog> {
       }
       if (!mounted) return;
       if (block) ref.invalidate(chatBlockedUsersProvider);
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(block ? '참여자를 차단했어요.' : '신고가 접수됐어요.')));
-      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(unblock
+              ? '내 차단을 해제했어요.'
+              : block
+                  ? '참여자를 차단했어요.'
+                  : '신고가 접수됐어요. 차단은 별도로 선택할 수 있어요.')));
+      Navigator.pop(context, unblock);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -104,6 +121,8 @@ class _SafetyDialogState extends ConsumerState<_SafetyDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final blocks = ref.watch(chatBlockedUsersProvider);
+    final isBlocked = blocks.valueOrNull?.contains(_target) ?? false;
     final others = widget.room.participantIds
         .where((id) => id != widget.currentUserId)
         .toList();
@@ -167,10 +186,13 @@ class _SafetyDialogState extends ConsumerState<_SafetyDialog> {
                 child: const Text('닫기')),
             if (widget.message == null)
               TextButton(
-                  onPressed: _busy || _target == null
+                  onPressed: _busy ||
+                          _target == null ||
+                          blocks.isLoading ||
+                          blocks.hasError
                       ? null
                       : () => _submit(block: true),
-                  child: const Text('차단하기')),
+                  child: Text(isBlocked ? '차단 해제' : '차단하기')),
             FilledButton(
                 onPressed: _busy || _target == null
                     ? null

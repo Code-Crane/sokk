@@ -79,7 +79,13 @@ class ApiError implements Exception {
           kind: ApiErrorKind.forbidden,
           statusCode: statusCode,
           serverMessage: serverMessage,
-          userMessage: '권한, 인증 상태, 이용 제한 조건을 확인해주세요.',
+          userMessage:
+              serverMessage?.contains('blocked by a user block') == true
+                  ? '이 사용자와는 상호작용할 수 없어요.'
+                  : serverMessage?.contains('restricted from') == true ||
+                          serverMessage?.contains('account is banned') == true
+                      ? '현재 이 기능을 사용할 수 없어요.'
+                      : '권한, 인증 상태, 이용 제한 조건을 확인해주세요.',
         ),
       404 => ApiError(
           kind: ApiErrorKind.notFound,
