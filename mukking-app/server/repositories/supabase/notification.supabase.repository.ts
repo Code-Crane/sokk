@@ -18,6 +18,8 @@ type NotificationRow = {
   restaurant_id: string | null;
   matching_post_id: string | null;
   actor_user_id: string | null;
+  chat_room_id: string | null;
+  event_key: string | null;
   read_at: string | null;
   created_at: string;
 };
@@ -32,6 +34,8 @@ function toNotification(row: NotificationRow): UserNotification {
     restaurantId: row.restaurant_id ?? undefined,
     matchingPostId: row.matching_post_id ?? undefined,
     actorUserId: row.actor_user_id ?? undefined,
+    chatRoomId: row.chat_room_id ?? undefined,
+    eventKey: row.event_key ?? undefined,
     readAt: row.read_at ?? undefined,
     createdAt: row.created_at
   };
@@ -47,6 +51,8 @@ function toInsert(input: CreateNotificationInput): Record<string, unknown> {
     restaurant_id: input.restaurantId ?? null,
     matching_post_id: input.matchingPostId ?? null,
     actor_user_id: input.actorUserId ?? null,
+    chat_room_id: input.chatRoomId ?? null,
+    event_key: input.eventKey ?? input.matchingPostId,
     created_at: nowIso()
   };
 }
@@ -57,7 +63,7 @@ export const supabaseNotificationRepository: NotificationRepository = {
     const { data, error } = await getSupabaseServiceRoleClient()
       .from("notifications")
       .upsert(inputs.map(toInsert), {
-        onConflict: "user_id,type,matching_post_id",
+        onConflict: "user_id,type,event_key",
         ignoreDuplicates: true
       })
       .select("*")

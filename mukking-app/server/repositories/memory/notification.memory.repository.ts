@@ -10,13 +10,14 @@ function isSameEvent(
     userId: string;
     type: string;
     matchingPostId?: string;
+    eventKey?: string;
   }
 ): boolean {
   return Boolean(
-    input.matchingPostId &&
+    (input.eventKey ?? input.matchingPostId) &&
       notification.userId === input.userId &&
       notification.type === input.type &&
-      notification.matchingPostId === input.matchingPostId
+      (notification.eventKey ?? notification.matchingPostId) === (input.eventKey ?? input.matchingPostId)
   );
 }
 
@@ -33,6 +34,7 @@ export const memoryNotificationRepository: NotificationRepository = {
       const notification: UserNotification = {
         id: createEntityId("notification"),
         ...input,
+        eventKey: input.eventKey ?? input.matchingPostId,
         createdAt: nowIso()
       };
       db.notifications.set(notification.id, notification);

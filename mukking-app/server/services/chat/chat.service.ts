@@ -7,6 +7,7 @@ import type {
 import { repositories } from "../../repositories";
 import { assertCanUseChat, assertVerifiedUser } from "../auth/auth.service";
 import { assertNoActiveBlockBetween } from "../block/block.service";
+import { notifyChatMessage } from "../notification/notification.service";
 
 const ROOM_OPENED_SYSTEM_MESSAGE = "매칭이 성사되어 채팅방이 열렸습니다.";
 
@@ -101,6 +102,7 @@ export async function sendMessage(
   });
 
   await repositories.chat.touchRoom(roomId, message.createdAt);
+  await notifyChatMessage(room, message);
 
   return message;
 }

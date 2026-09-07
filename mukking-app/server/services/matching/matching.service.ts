@@ -10,7 +10,7 @@ import { repositories } from "../../repositories";
 import { assertCanUseMatching, assertVerifiedUser } from "../auth/auth.service";
 import { assertNoActiveBlockBetween } from "../block/block.service";
 import { ensureChatForAcceptedPost } from "../chat/chat.service";
-import { createFavoriteRestaurantPartyNotifications } from "../notification/notification.service";
+import { createFavoriteRestaurantPartyNotifications, notifyJoinEvent } from "../notification/notification.service";
 import { createPendingEvaluationsForMatch } from "../rating/rating.service";
 
 export interface RespondJoinRequestResult {
@@ -107,7 +107,9 @@ export async function createJoinRequest(
     });
   }
 
-  return repositories.matching.createJoinRequest(postId, userId);
+  const request = await repositories.matching.createJoinRequest(postId, userId);
+  await notifyJoinEvent(post, request, "join_request_received");
+  return request;
 }
 
 export async function listJoinRequestsForPost(
@@ -211,12 +213,16 @@ export async function respondToJoinRequest(
     }
 
     updatedRequest = result.request;
+    await notifyJoinEvent(result.post, updatedRequest, "join_request_accepted");
     chatRoom = await ensureChatForAcceptedPost(result.post);
   } else {
     updatedRequest = await repositories.matching.updateJoinRequestStatus(
       request.id,
       input.decision
     );
+    if (updatedRequest.status === "rejected") {
+      await notifyJoinEvent(post, updatedRequest, "join_request_rejected");
+    }
   }
 
   return {

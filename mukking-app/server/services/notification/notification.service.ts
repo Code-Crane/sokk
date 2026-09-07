@@ -1,5 +1,9 @@
 import type {
   MatchingPost,
+  JoinRequest,
+  ChatRoom,
+  ChatMessage,
+  CreateNotificationInput,
   NotificationListQuery,
   UnreadNotificationCountResponse,
   UserNotification
@@ -10,6 +14,39 @@ import { dispatchNotificationsBestEffort } from "../push/push-dispatch.service";
 
 function invalid(message: string): never {
   throw Object.assign(new Error(message), { statusCode: 400 });
+}
+
+async function persistBestEffort(inputs: CreateNotificationInput[]): Promise<void> {
+  try {
+    const rows = await repositories.notifications.createMany(inputs);
+    await dispatchNotificationsBestEffort(rows);
+  } catch {
+    console.error("[notification] Core event notification failed after business persistence.");
+  }
+}
+
+export async function notifyJoinEvent(post: MatchingPost, request: JoinRequest,
+  type: "join_request_received" | "join_request_accepted" | "join_request_rejected"
+): Promise<void> {
+  const received = type === "join_request_received";
+  const userId = received ? post.authorId : request.requesterId;
+  const actorUserId = received ? request.requesterId : post.authorId;
+  if (userId === actorUserId) return;
+  const copy = {
+    join_request_received: ["새로운 참여 신청이 왔어요", "모임 참여 신청을 확인해보세요."],
+    join_request_accepted: ["참여 신청이 승인됐어요", "모임이 확정됐어요. 채팅에서 약속을 확인해보세요."],
+    join_request_rejected: ["참여 신청 결과가 도착했어요", "이번 모임 참여 신청이 승인되지 않았어요."]
+  }[type];
+  await persistBestEffort([{userId, actorUserId, type, title: copy[0], body: copy[1],
+    matchingPostId: post.id, restaurantId: post.restaurantId, eventKey: request.id}]);
+}
+
+export async function notifyChatMessage(room: ChatRoom, message: ChatMessage): Promise<void> {
+  await persistBestEffort([...new Set(room.participantIds)]
+    .filter(userId => userId !== message.senderId)
+    .map(userId => ({userId, actorUserId: message.senderId, type: "chat_message_created",
+      title: "새 메시지가 도착했어요", body: "채팅방에서 새 메시지를 확인해보세요.",
+      matchingPostId: room.postId, chatRoomId: room.id, eventKey: message.id})));
 }
 
 function parseOptionalInteger(

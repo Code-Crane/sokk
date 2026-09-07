@@ -19,6 +19,7 @@ function toPayload(notification: UserNotification) {
     data: {
       notificationId: notification.id,
       type: notification.type,
+      ...(notification.chatRoomId ? { chatRoomId: notification.chatRoomId } : {}),
       ...(notification.restaurantId
         ? { restaurantId: notification.restaurantId }
         : {}),
