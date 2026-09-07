@@ -179,6 +179,7 @@ async function main() {
       body: "duplicate",
       restaurant_id: restaurantId,
       matching_post_id: firstPost.payload?.id,
+      event_key: firstPost.payload?.id,
       actor_user_id: author.id
     });
     record(
@@ -333,6 +334,41 @@ async function main() {
         unreadAfterRestart.payload?.unreadCount === 1 && cUnreadAfterRestart.payload?.unreadCount === 2,
       `status=${afterRestart.status}, count=${afterRestart.payload?.length}, bUnread=${unreadAfterRestart.payload?.unreadCount}, cUnread=${cUnreadAfterRestart.payload?.unreadCount}`
     );
+
+    const marker = `[TEST][NOTIFICATION_CORE:${crypto.randomUUID()}]`;
+    const coreTypes = ["join_request_received", "join_request_accepted",
+      "join_request_rejected", "chat_message_created", "favorite_restaurant_party_created"];
+    const coreRows = coreTypes.map((type, index) => ({
+      id: `${marker}:${index}`, user_id: b.id, type,
+      title: marker, body: `${marker} disposable schema validation`,
+      matching_post_id: firstPost.payload.id, chat_room_id: null,
+      // Production repository supplies application time, not the DB clock default.
+      created_at: new Date().toISOString(),
+      event_key: `${marker}:shared-event`
+    }));
+    const inserted = await service.from("notifications").insert(coreRows).select("id,type,chat_room_id,event_key");
+    record("all five core types and nullable chat room", !inserted.error &&
+      inserted.data?.length === 5 && inserted.data.every((row) => row.chat_room_id === null),
+      `rows=${inserted.data?.length ?? 0}, code=${inserted.error?.code ?? "none"}`);
+    const duplicate = await service.from("notifications").insert({ ...coreRows[0], id: `${marker}:duplicate` });
+    record("core same user/type/event dedup", duplicate.error?.code === "23505", `code=${duplicate.error?.code}`);
+    const distinct = await service.from("notifications").insert({ ...coreRows[0], id: `${marker}:distinct`, event_key: `${marker}:different` });
+    record("distinct event accepted", !distinct.error, `code=${distinct.error?.code ?? "none"}`);
+    const otherUser = await service.from("notifications").insert({ ...coreRows[0], id: `${marker}:other`, user_id: c.id });
+    record("dedup scoped to recipient", !otherUser.error, `code=${otherUser.error?.code ?? "none"}`);
+    for (const eventKey of [null, " "]) {
+      const invalid = await service.from("notifications").insert({ ...coreRows[0], id: `${marker}:invalid`, event_key: eventKey });
+      record(`event key ${eventKey === null ? "null" : "blank"} rejected`, invalid.error?.code === "23514", `code=${invalid.error?.code}`);
+    }
+    const coreList = await api(baseUrl, "/api/notifications", b.token);
+    record("core types returned through authenticated API", coreList.status === 200 &&
+      coreTypes.every((type) => coreList.payload?.some((row) => row.type === type && row.title === marker)),
+      `status=${coreList.status}`);
+    const coreRead = await api(baseUrl, `/api/notifications/${encodeURIComponent(coreRows[0].id)}/read`, b.token, { method: "PATCH" });
+    const coreReload = await api(baseUrl, "/api/notifications", b.token);
+    record("core read state persists on reload", coreRead.status === 200 && Boolean(coreRead.payload?.readAt) &&
+      coreReload.payload?.find((row) => row.id === coreRows[0].id)?.readAt === coreRead.payload?.readAt,
+      `status=${coreRead.status}`);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     if (matchingPostIds.length > 0) {

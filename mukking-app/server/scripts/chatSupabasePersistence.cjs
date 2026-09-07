@@ -277,6 +277,15 @@ async function main() {
       `status=${firstMessage.status}`
     );
     record("participant sends message", secondMessage.status === 201, `status=${secondMessage.status}`);
+    const messageNotifications = await service.from("notifications")
+      .select("user_id,chat_room_id,matching_post_id,event_key,body")
+      .eq("type", "chat_message_created").eq("event_key", firstMessage.payload.id);
+    record("chat event targets other participants with exact room and no message text",
+      !messageNotifications.error && messageNotifications.data?.length === 2 &&
+      messageNotifications.data.every((row) => [guestA.id, guestB.id].includes(row.user_id) &&
+        row.chat_room_id === roomId && row.matching_post_id === postId &&
+        !row.body.includes(firstMessage.payload.text)),
+      `notifications=${messageNotifications.data?.length}`);
     const blankMessage = await api(baseUrl, `/api/chat/rooms/${roomId}/messages`, guestA.token, {
       method: "POST",
       body: JSON.stringify({ text: "   " })
@@ -453,6 +462,10 @@ async function main() {
     if (sanctionIds.length > 0) {
       const sanctionResult = await service.from("sanctions").delete().in("id", sanctionIds);
       if (sanctionResult.error) cleanupErrors.push("sanction");
+    }
+    if (users.length > 0) {
+      const mannerCleanup = await service.from("user_manner_profiles").delete().in("user_id", users.map((user) => user.id));
+      if (mannerCleanup.error) cleanupErrors.push("manner-profile");
     }
     for (const user of users) {
       const userResult = await service.auth.admin.deleteUser(user.id);

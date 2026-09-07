@@ -227,7 +227,16 @@ async function main() {
       method: "POST",
       body: JSON.stringify({ decision: "accepted" })
     });
-    record("processed request cannot be accepted twice", repeatAccept.status === 409, `status=${repeatAccept.status}`);
+    const replayRooms = await service.from("chat_rooms").select("id")
+      .eq("matching_post_id", post.payload.id).eq("status", "active");
+    const acceptedNotifications = await service.from("notifications").select("id")
+      .eq("user_id", guest.id).eq("type", "join_request_accepted").eq("event_key", join.payload.id);
+    record("accepted replay recovers same room without duplicate notification",
+      repeatAccept.status === 200 && repeatAccept.payload?.request?.status === "accepted" &&
+      repeatAccept.payload?.chatRoom?.id === accepted.payload?.chatRoom?.id &&
+      !replayRooms.error && replayRooms.data?.length === 1 &&
+      !acceptedNotifications.error && acceptedNotifications.data?.length === 1,
+      `status=${repeatAccept.status}, rooms=${replayRooms.data?.length}, notifications=${acceptedNotifications.data?.length}`);
 
     const rejectPost = await createPost("영속성 거절 테스트");
     const rejectJoin = await api(baseUrl, `/api/matching/posts/${rejectPost.payload?.id}/requests`, rejectGuest.token, {
@@ -238,6 +247,16 @@ async function main() {
       body: JSON.stringify({ decision: "rejected" })
     });
     record("rejected join persisted", rejected.status === 200 && rejected.payload?.request?.status === "rejected", `status=${rejected.status}`);
+    const receivedNotifications = await service.from("notifications").select("user_id,event_key,matching_post_id")
+      .eq("type", "join_request_received").eq("event_key", join.payload.id);
+    const rejectedNotifications = await service.from("notifications").select("user_id,event_key,matching_post_id")
+      .eq("type", "join_request_rejected").eq("event_key", rejectJoin.payload.id);
+    record("join events persist to correct recipients and party targets",
+      !receivedNotifications.error && receivedNotifications.data?.length === 1 &&
+      receivedNotifications.data[0].user_id === host.id && receivedNotifications.data[0].matching_post_id === post.payload.id &&
+      !rejectedNotifications.error && rejectedNotifications.data?.length === 1 &&
+      rejectedNotifications.data[0].user_id === rejectGuest.id && rejectedNotifications.data[0].matching_post_id === rejectPost.payload.id,
+      `received=${receivedNotifications.data?.length}, rejected=${rejectedNotifications.data?.length}`);
 
     const capacityPost = await createPost("정원 경합 테스트", 1);
     const capacityJoinA = await api(baseUrl, `/api/matching/posts/${capacityPost.payload?.id}/requests`, rejectGuest.token, { method: "POST" });
@@ -322,10 +341,14 @@ async function main() {
       await service.from("restaurant_favorites").delete().eq("restaurant_id", restaurantId);
       await service.from("restaurants").delete().eq("id", restaurantId);
     }
-    await service.auth.admin.deleteUser(host.id);
-    await service.auth.admin.deleteUser(guest.id);
-    await service.auth.admin.deleteUser(rejectGuest.id);
-    await service.auth.admin.deleteUser(overflowGuest.id);
+    const testUserIds = [host.id, guest.id, rejectGuest.id, overflowGuest.id];
+    const mannerCleanup = await service.from("user_manner_profiles").delete().in("user_id", testUserIds);
+    if (mannerCleanup.error) throw mannerCleanup.error;
+    for (const id of testUserIds) {
+      const removed = await service.auth.admin.deleteUser(id);
+      if (removed.error) throw removed.error;
+    }
+    record("temporary account cleanup", true, `removed=${testUserIds.length}`);
   }
 
   for (const result of results) {

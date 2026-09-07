@@ -190,6 +190,55 @@ async function main() {
       bUnreadAfter.payload?.unreadCount === 1 && cUnreadAfter.payload?.unreadCount === 2,
       `b=${bUnreadAfter.payload?.unreadCount}, c=${cUnreadAfter.payload?.unreadCount}`
     );
+    await verify(baseUrl, b.token);
+    await verify(baseUrl, c.token);
+    const rows = async (user, type) => (await repositories.notifications.listByUser(user.userId, {limit: 100})).filter(n => n.type === type);
+    const join = (user, post) => api(baseUrl, `/api/matching/posts/${post.id}/requests`, user.token, {method: "POST"});
+    const decide = (request, decision) => api(baseUrl, `/api/matching/requests/${request.id}/respond`, author.token, {method: "POST", body: JSON.stringify({decision})});
+    const requestB = await join(b, firstPost.payload);
+    const duplicate = await join(b, firstPost.payload);
+    record("join receipt recipient and duplicate rejection", requestB.status === 201 && duplicate.status === 409 &&
+      (await rows(author, "join_request_received")).length === 1 && (await rows(b, "join_request_received")).length === 0);
+    const accepted = await decide(requestB.payload, "accepted");
+    await decide(requestB.payload, "accepted");
+    record("accept once despite recovery", accepted.status === 200 && (await rows(b, "join_request_accepted")).length === 1);
+    const requestC = await join(c, firstPost.payload);
+    await decide(requestC.payload, "accepted");
+    record("two requests on one post create distinct author events", (await rows(author, "join_request_received")).length === 2);
+    const rejectedRequest = await join(b, secondPost.payload);
+    const rejected = await decide(rejectedRequest.payload, "rejected");
+    const rejectedAgain = await decide(rejectedRequest.payload, "rejected");
+    record("reject once", rejected.status === 200 && rejectedAgain.status === 409 && (await rows(b, "join_request_rejected")).length === 1);
+    const retryRequest = await join(b, secondPost.payload);
+    await decide(retryRequest.payload, "rejected");
+    record("new request after rejection is a distinct event", (await rows(b, "join_request_rejected")).length === 2);
+    const roomId = accepted.payload.chatRoom.id;
+    const send = (text) => api(baseUrl, `/api/chat/rooms/${roomId}/messages`, author.token, {method: "POST", body: JSON.stringify({text})});
+    const message = await send("[TEST] private content must not be copied");
+    await send("[TEST] another message");
+    const failedSend = await send(" ");
+    const bMessages = await rows(b, "chat_message_created");
+    record("message recipients exclude sender and include each participant", message.status === 201 &&
+      bMessages.length === 2 && (await rows(c, "chat_message_created")).length === 2 && (await rows(author, "chat_message_created")).length === 0);
+    record("message target and safe body; failed send creates no event", failedSend.status === 400 &&
+      bMessages.every(n => n.chatRoomId === roomId && n.matchingPostId === firstPost.payload.id && !n.body.includes("[TEST]")));
+    const { notifyChatMessage } = require("../dist/server/services/notification/notification.service");
+    await notifyChatMessage(await repositories.chat.findRoomById(roomId), message.payload);
+    record("same message replay deduplicated per recipient", (await rows(b, "chat_message_created")).length === 2);
+    const originalDevices = repositories.pushDevices.listActiveDevicesByUser;
+    try {
+      repositories.pushDevices.listActiveDevicesByUser = async () => { throw new Error("simulated push failure"); };
+      await send("[TEST] push failure");
+    } finally { repositories.pushDevices.listActiveDevicesByUser = originalDevices; }
+    record("push failure retains persisted core notifications", (await rows(b, "chat_message_created")).length === 3);
+    try {
+      repositories.notifications.createMany = async () => { throw new Error("simulated core persistence failure"); };
+      record("message survives notification persistence failure", (await send("[TEST] persist failure")).status === 201);
+      const request = await join(c, secondPost.payload);
+      record("join and reject survive notification failure", request.status === 201 && (await decide(request.payload, "rejected")).status === 200);
+      const nextRequest = await join(c, secondPost.payload);
+      record("approval survives notification failure", (await decide(nextRequest.payload, "accepted")).status === 200);
+    } finally { repositories.notifications.createMany = originalCreateMany; }
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
