@@ -12,6 +12,7 @@ import '../../features/matching/presentation/party_detail_screen.dart';
 import '../../features/profile/presentation/my_screen.dart';
 import '../../widgets/app_shell.dart';
 import 'app_routes.dart';
+import '../../features/notifications/presentation/notifications_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -28,6 +29,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return AppShell(child: child);
         },
         routes: [
+          GoRoute(
+              path: AppRoutes.notifications,
+              builder: (context, state) => const NotificationsScreen()),
           GoRoute(
             path: AppRoutes.home,
             pageBuilder: (context, state) {

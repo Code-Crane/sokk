@@ -36,6 +36,7 @@ class ApiNotificationRepository implements NotificationRepository {
       restaurantId: dto.restaurantId,
       matchingPostId: dto.matchingPostId,
       actorUserId: dto.actorUserId,
+      chatRoomId: dto.chatRoomId,
       readAt: DateTime.tryParse(dto.readAt ?? '')?.toLocal(),
       createdAt: DateTime.tryParse(dto.createdAt)?.toLocal() ?? DateTime.now(),
     );

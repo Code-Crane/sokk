@@ -37,6 +37,7 @@ class NotificationDto {
     this.restaurantId,
     this.matchingPostId,
     this.actorUserId,
+    this.chatRoomId,
     this.readAt,
   });
 
@@ -49,6 +50,7 @@ class NotificationDto {
       restaurantId: json['restaurantId'] as String?,
       matchingPostId: json['matchingPostId'] as String?,
       actorUserId: json['actorUserId'] as String?,
+      chatRoomId: json['chatRoomId'] as String?,
       readAt: json['readAt'] as String?,
       createdAt: json['createdAt'] as String? ?? '',
     );
@@ -61,6 +63,7 @@ class NotificationDto {
   final String? restaurantId;
   final String? matchingPostId;
   final String? actorUserId;
+  final String? chatRoomId;
   final String? readAt;
   final String createdAt;
 }

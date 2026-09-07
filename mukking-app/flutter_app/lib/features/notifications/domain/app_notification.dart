@@ -8,6 +8,7 @@ class AppNotification {
     this.restaurantId,
     this.matchingPostId,
     this.actorUserId,
+    this.chatRoomId,
     this.readAt,
   });
 
@@ -18,6 +19,7 @@ class AppNotification {
   final String? restaurantId;
   final String? matchingPostId;
   final String? actorUserId;
+  final String? chatRoomId;
   final DateTime? readAt;
   final DateTime createdAt;
 
@@ -32,6 +34,7 @@ class AppNotification {
       restaurantId: restaurantId,
       matchingPostId: matchingPostId,
       actorUserId: actorUserId,
+      chatRoomId: chatRoomId,
       readAt: readAt ?? this.readAt,
       createdAt: createdAt,
     );

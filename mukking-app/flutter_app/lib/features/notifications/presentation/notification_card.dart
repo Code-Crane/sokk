@@ -33,9 +33,14 @@ class NotificationCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(20),
             ),
             child: Icon(
-              notification.isRead
-                  ? Icons.notifications_none_rounded
-                  : Icons.notifications_active_rounded,
+              switch (notification.type) {
+                'favorite_restaurant_party_created' => Icons.restaurant,
+                'chat_message_created' => Icons.chat_bubble_outline,
+                'join_request_received' => Icons.person_add_alt,
+                'join_request_accepted' => Icons.check_circle_outline,
+                'join_request_rejected' => Icons.info_outline,
+                _ => Icons.notifications_none_rounded,
+              },
               color: tokens.favorite,
             ),
           ),
@@ -53,6 +58,12 @@ class NotificationCard extends StatelessWidget {
                   notification.body,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
+                const SizedBox(height: 4),
+                Text(
+                    '${notification.createdAt.toLocal().year}/${notification.createdAt.toLocal().month}/${notification.createdAt.toLocal().day} '
+                    '${notification.createdAt.toLocal().hour.toString().padLeft(2, '0')}:${notification.createdAt.toLocal().minute.toString().padLeft(2, '0')} · '
+                    '${notification.isRead ? "읽음" : "안 읽음"}',
+                    style: Theme.of(context).textTheme.labelSmall),
               ],
             ),
           ),

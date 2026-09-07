@@ -17,6 +17,7 @@ import '../../matching/domain/matching_party.dart';
 import '../../matching/providers/matching_provider.dart';
 import '../../notifications/presentation/notification_card.dart';
 import '../../notifications/providers/notification_provider.dart';
+import '../../notifications/presentation/notifications_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -29,8 +30,10 @@ class HomeScreen extends ConsumerWidget {
     final favoriteParties = ref.watch(favoriteRestaurantPartiesProvider);
     final urgentParties = ref.watch(urgentPartiesProvider);
     final notifications = ref.watch(notificationsProvider);
-    final unreadCount =
-        ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
+    final unreadState = ref.watch(unreadNotificationCountProvider);
+    final unreadCount = unreadState.isLoading || unreadState.hasError
+        ? 0
+        : unreadState.valueOrNull ?? 0;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -66,9 +69,11 @@ class HomeScreen extends ConsumerWidget {
                     color: tokens.accent,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Icon(
-                    Icons.notifications_rounded,
-                    color: tokens.textPrimary,
+                  child: IconButton(
+                    tooltip: '알림 목록',
+                    onPressed: () => context.push(AppRoutes.notifications),
+                    icon: Icon(Icons.notifications_rounded,
+                        color: tokens.textPrimary),
                   ),
                 ),
                 if (unreadCount > 0)
@@ -138,15 +143,7 @@ class HomeScreen extends ConsumerWidget {
 
             return NotificationCard(
               notification: items.first,
-              onTap: () {
-                ref
-                    .read(markNotificationReadProvider.notifier)
-                    .markRead(items.first.id);
-                final partyId = items.first.matchingPostId;
-                if (partyId != null) {
-                  context.push(AppRoutes.partyDetailPath(partyId));
-                }
-              },
+              onTap: () => openNotification(context, ref, items.first),
             );
           },
           loading: () => const MissionCard(),
