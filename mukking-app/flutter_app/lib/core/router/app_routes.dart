@@ -7,6 +7,7 @@ class AppRoutes {
   static const createParty = '/create-party';
   static const chat = '/chat';
   static const my = '/my';
+  static const pet = '/pet';
   static const notifications = '/notifications';
   static const partyDetail = '/party/:partyId';
   static const restaurants = '/restaurants';

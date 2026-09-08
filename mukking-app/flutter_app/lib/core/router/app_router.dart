@@ -10,6 +10,7 @@ import '../../features/home/presentation/home_screen.dart';
 import '../../features/matching/presentation/create_party_screen.dart';
 import '../../features/matching/presentation/party_detail_screen.dart';
 import '../../features/profile/presentation/my_screen.dart';
+import '../../features/pet/presentation/pet_screen.dart';
 import '../../widgets/app_shell.dart';
 import 'app_routes.dart';
 import '../../features/notifications/presentation/notifications_screen.dart';
@@ -29,6 +30,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return AppShell(child: child);
         },
         routes: [
+          GoRoute(
+              path: AppRoutes.pet,
+              builder: (context, state) => const PetScreen()),
           GoRoute(
               path: AppRoutes.notifications,
               builder: (context, state) => const NotificationsScreen()),

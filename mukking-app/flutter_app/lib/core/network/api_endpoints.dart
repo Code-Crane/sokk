@@ -2,6 +2,7 @@ class ApiEndpoints {
   const ApiEndpoints._();
 
   static const authMe = '/api/auth/me';
+  static const petMe = '/api/pets/me';
   static const verificationStatus = '/api/auth/verification/status';
   static const verificationMockStart = '/api/auth/verification/mock/start';
   static const verificationMockComplete =

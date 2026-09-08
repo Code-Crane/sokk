@@ -7,7 +7,7 @@ import '../../../core/network/api_error.dart';
 import '../../../core/router/app_routes.dart';
 import '../../../core/theme/theme_tokens.dart';
 import '../../../widgets/mukking_card.dart';
-import '../../../widgets/xp_progress_bar.dart';
+import '../../pet/presentation/pet_widgets.dart';
 import '../../auth/domain/auth_user.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/presentation/auth_placeholder_screen.dart';
@@ -85,7 +85,7 @@ class MyScreen extends ConsumerWidget {
                           style: Theme.of(context).textTheme.titleLarge),
                       const SizedBox(height: 4),
                       Text(
-                        'Lv. 7 · ${summary.user.mannerGrade.label} · ${summary.verification?.label ?? summary.user.verificationStatus.label}',
+                        '${summary.user.mannerGrade.label} · ${summary.verification?.label ?? summary.user.verificationStatus.label}',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                       if (auth.message != null) ...[
@@ -98,8 +98,6 @@ class MyScreen extends ConsumerWidget {
                                   ),
                         ),
                       ],
-                      const SizedBox(height: 10),
-                      const XpProgressBar(currentXp: 840, targetXp: 1000),
                     ],
                   ),
                 ),
@@ -111,6 +109,8 @@ class MyScreen extends ConsumerWidget {
           ),
           error: (error, _) => _ProfileErrorCard(error: error),
         ),
+        const SizedBox(height: 16),
+        const MyPetCard(),
         if (config.enableMockVerification) ...[
           profile.when(
             data: (summary) {

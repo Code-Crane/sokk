@@ -103,7 +103,7 @@ class AppShell extends ConsumerWidget {
     if (location.startsWith(AppRoutes.chat)) {
       return 3;
     }
-    if (location.startsWith(AppRoutes.my)) {
+    if (location.startsWith(AppRoutes.my) || location == AppRoutes.pet) {
       return 4;
     }
     return 0;
