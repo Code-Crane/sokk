@@ -9,6 +9,7 @@
     "build": "tsc",
     "start": "node dist/server/server.js",
     "typecheck": "tsc --noEmit",
+    "smoke:pets": "node scripts/petMemorySmoke.cjs",
     "security:scan": "node scripts/scanSecrets.cjs",
     "smoke:restaurants": "node scripts/restaurantSmoke.cjs",
     "smoke:restaurants:kakao": "node scripts/kakaoRestaurantDiscoverySmoke.cjs",
