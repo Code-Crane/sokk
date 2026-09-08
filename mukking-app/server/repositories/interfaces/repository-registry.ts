@@ -14,7 +14,9 @@ import type { SanctionRepository } from "./sanction.repository";
 import type { UserRepository } from "./user.repository";
 import type { VerificationRepository } from "./verification.repository";
 
+import type { PetRepository } from "./pet.repository";
 export interface RepositoryRegistry {
+  pets: PetRepository;
   admin: AdminRepository;
   auth: AuthRepository;
   blocks: BlockRepository;

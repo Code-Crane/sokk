@@ -12,6 +12,7 @@ import {
   MIN_MATCHING_MANNER_SCORE
 } from "../../../shared/utils/rating";
 import { repositories } from "../../repositories";
+import { awardPetXpBestEffort } from "../pet/pet.service";
 
 export { DEFAULT_MANNER_SCORE, getMannerGrade, MIN_MATCHING_MANNER_SCORE };
 
@@ -116,6 +117,7 @@ export async function submitMannerRating(
     submitted.nextGrade
   );
 
+  await awardPetXpBestEffort(reviewerId, "manner_rating_completed", input.matchId);
   return {
     previousScore: submitted.previousScore,
     nextScore: submitted.nextScore,

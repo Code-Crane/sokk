@@ -7,6 +7,7 @@ import type {
 } from "../../../shared/types";
 import { isFutureIso, nowIso } from "../../../shared/utils/date";
 import { repositories } from "../../repositories";
+import { awardPetXpBestEffort } from "../pet/pet.service";
 import { assertCanUseMatching, assertVerifiedUser } from "../auth/auth.service";
 import { assertNoActiveBlockBetween } from "../block/block.service";
 import { ensureChatForAcceptedPost } from "../chat/chat.service";
@@ -260,6 +261,10 @@ export async function completeMatchingPost(
   const timestamp = nowIso();
   const completedPost = await repositories.matching.completePost(post.id, timestamp);
   await createPendingEvaluationsForMatch(post.id, participantIds);
+  for (const participantId of new Set(participantIds)) {
+    await awardPetXpBestEffort(participantId,
+      participantId === post.authorId ? "hosted_matching_completed" : "matching_completed", post.id);
+  }
 
   return completedPost;
 }

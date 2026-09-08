@@ -15,7 +15,9 @@ import { memorySanctionRepository } from "./sanction.memory.repository";
 import { memoryUserRepository } from "./user.memory.repository";
 import { memoryVerificationRepository } from "./verification.memory.repository";
 
+import { memoryPetRepository } from "./pet.memory.repository";
 export const memoryRepositories: RepositoryRegistry = {
+  pets: memoryPetRepository,
   admin: memoryAdminRepository,
   auth: memoryAuthRepository,
   blocks: memoryBlockRepository,

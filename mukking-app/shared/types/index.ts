@@ -1,4 +1,5 @@
 export * from "./chat.types";
+export * from "./pet";
 export * from "./matching.types";
 export * from "./notification.types";
 export * from "./push.types";

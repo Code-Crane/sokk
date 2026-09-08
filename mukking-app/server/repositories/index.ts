@@ -16,10 +16,12 @@ import { supabaseSanctionRepository } from "./supabase/sanction.supabase.reposit
 import { supabaseUserRepository } from "./supabase/user.supabase.repository";
 import { supabaseVerificationRepository } from "./supabase/verification.supabase.repository";
 
+import { supabasePetRepository } from "./supabase/pet.supabase.repository";
 const useSupabaseRepositories = environment.repositoryProvider === "supabase";
 
 export const repositories: RepositoryRegistry = {
   ...memoryRepositories,
+  pets: useSupabaseRepositories ? supabasePetRepository : memoryRepositories.pets,
   admin: useSupabaseRepositories
     ? supabaseAdminRepository
     : memoryRepositories.admin,

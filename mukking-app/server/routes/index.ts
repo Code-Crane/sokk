@@ -11,7 +11,9 @@ import { ratingRoutes } from "./rating.routes";
 import { reportRoutes } from "./report.routes";
 import { restaurantRoutes } from "./restaurant.routes";
 
+import { petRoutes } from "./pet.routes";
 export const routes = Router();
+routes.use("/pets", petRoutes);
 
 routes.use("/health", healthRoutes);
 routes.use("/admin", adminRoutes);
