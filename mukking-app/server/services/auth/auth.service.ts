@@ -16,6 +16,7 @@ import {
   getPendingEvaluationCount
 } from "../rating/rating.service";
 import { assertNoActiveRestriction } from "../sanction/sanction.service";
+import { isVerificationAcceptedForEnvironment } from "../verification/verification-policy";
 
 async function toPublicUser(user: UserAccount): Promise<PublicUserProfile> {
   const storedMannerProfile = await repositories.rating.getMannerProfile(user.id);
@@ -202,7 +203,9 @@ export async function assertVerifiedUser(userId: string): Promise<UserAccount> {
     throw Object.assign(new Error("User not found."), { statusCode: 404 });
   }
 
-  if (user.verificationStatus !== "verified") {
+  const claim = environment.nodeEnv === "production"
+    ? await repositories.verification.findClaimByUserId(userId) : null;
+  if (!isVerificationAcceptedForEnvironment(user, claim)) {
     throw Object.assign(new Error("Verification is required for this action."), {
       statusCode: 403
     });

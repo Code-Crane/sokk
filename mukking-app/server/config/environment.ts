@@ -4,6 +4,27 @@ import crypto from "crypto";
 dotenv.config();
 
 const isProduction = process.env.NODE_ENV === "production";
+const runtimeEnvironment = process.env.NODE_ENV ?? "development";
+function configurationError(name: string): never {
+  throw new Error(`Invalid server configuration: ${name}`);
+}
+if (!["development", "test", "production"].includes(runtimeEnvironment)) configurationError("NODE_ENV");
+if (process.env.AUTH_PROVIDER !== undefined && !["supabase", "signed_mock"].includes(process.env.AUTH_PROVIDER)) configurationError("AUTH_PROVIDER");
+if (process.env.REPOSITORY_PROVIDER !== undefined && !["supabase", "memory"].includes(process.env.REPOSITORY_PROVIDER)) configurationError("REPOSITORY_PROVIDER");
+if (process.env.MOCK_VERIFICATION_ENABLED !== undefined && !["true", "false"].includes(process.env.MOCK_VERIFICATION_ENABLED)) configurationError("MOCK_VERIFICATION_ENABLED");
+if (isProduction) {
+  if (process.env.AUTH_PROVIDER !== "supabase") configurationError("AUTH_PROVIDER must be supabase in production");
+  if (process.env.REPOSITORY_PROVIDER !== "supabase") configurationError("REPOSITORY_PROVIDER must be supabase in production");
+  if (process.env.MOCK_VERIFICATION_ENABLED === "true") configurationError("mock verification is forbidden in production");
+  if (process.env.ADMIN_REQUIRE_MFA !== undefined && process.env.ADMIN_REQUIRE_MFA !== "true") configurationError("ADMIN_REQUIRE_MFA must be true in production");
+  for (const name of ["SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"]) {
+    if (!process.env[name]?.trim()) configurationError(`${name} is required`);
+  }
+  try {
+    const url = new URL(process.env.SUPABASE_URL!);
+    if (url.protocol !== "https:" || url.username || url.password) configurationError("SUPABASE_URL must use HTTPS without credentials");
+  } catch { configurationError("SUPABASE_URL"); }
+}
 const localDevJwtSecret = crypto.randomBytes(32).toString("hex");
 
 function readNumber(name: string, fallback: number): number {
@@ -47,6 +68,7 @@ const defaultCorsOrigins = isProduction
 const defaultRateLimitWindowMs = readNumber("RATE_LIMIT_WINDOW_MS", 60_000);
 
 export const environment = {
+  mockVerificationEnabled: !isProduction && process.env.MOCK_VERIFICATION_ENABLED !== "false",
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? 4000),
   authProvider: process.env.AUTH_PROVIDER ?? "signed_mock",

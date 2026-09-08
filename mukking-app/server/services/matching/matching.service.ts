@@ -183,6 +183,7 @@ export async function respondToJoinRequest(
       });
     }
 
+    await assertCanUseMatching(request.requesterId);
     await assertNoActiveBlockBetween(authorId, request.requesterId, "matching");
     await assertNoActiveBlockBetween(authorId, request.requesterId, "chat");
   } else if (request.status !== "pending") {

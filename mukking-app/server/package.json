@@ -9,6 +9,7 @@
     "build": "tsc",
     "start": "node dist/server/server.js",
     "typecheck": "tsc --noEmit",
+    "smoke:identity-isolation": "node scripts/identityIsolationSmoke.cjs",
     "smoke:pets": "node scripts/petMemorySmoke.cjs",
     "security:scan": "node scripts/scanSecrets.cjs",
     "smoke:restaurants": "node scripts/restaurantSmoke.cjs",

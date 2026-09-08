@@ -30,6 +30,9 @@ function fromBase64Url(input: string): Buffer {
 }
 
 function sign(input: string): string {
+  if (environment.nodeEnv === "production") {
+    throw Object.assign(new Error("Mock authentication is unavailable."), { statusCode: 403 });
+  }
   if (!environment.authJwtSecret) {
     throw Object.assign(new Error("AUTH_JWT_SECRET is required."), {
       statusCode: 500

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { environment } from "../config/environment";
 import {
   loginController,
   meController,
@@ -26,21 +27,23 @@ authRoutes.get(
   verificationRateLimit,
   verificationStatusController
 );
-authRoutes.post(
-  "/verification/mock/start",
-  authMiddleware,
-  verificationRateLimit,
-  startMockVerificationController
-);
-authRoutes.post(
-  "/verification/mock/complete",
-  authMiddleware,
-  verificationRateLimit,
-  completeMockVerificationController
-);
-authRoutes.post(
-  "/verification/mock",
-  authMiddleware,
-  verificationRateLimit,
-  mockVerificationController
-);
+if (environment.nodeEnv !== "production" && environment.mockVerificationEnabled) {
+  authRoutes.post(
+    "/verification/mock/start",
+    authMiddleware,
+    verificationRateLimit,
+    startMockVerificationController
+  );
+  authRoutes.post(
+    "/verification/mock/complete",
+    authMiddleware,
+    verificationRateLimit,
+    completeMockVerificationController
+  );
+  authRoutes.post(
+    "/verification/mock",
+    authMiddleware,
+    verificationRateLimit,
+    mockVerificationController
+  );
+}

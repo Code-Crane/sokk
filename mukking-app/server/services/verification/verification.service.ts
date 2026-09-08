@@ -7,6 +7,7 @@ import type {
 } from "../../../shared/types";
 import { nowIso } from "../../../shared/utils/date";
 import { repositories } from "../../repositories";
+import { assertMockVerificationEnabled, isVerificationAcceptedForEnvironment } from "./verification-policy";
 
 const verificationLabels: Record<
   VerificationStatus,
@@ -32,17 +33,19 @@ export async function getVerificationStatusSnapshot(
     throw Object.assign(new Error("User not found."), { statusCode: 404 });
   }
 
+  const accepted = isVerificationAcceptedForEnvironment(user, await getVerificationClaim(userId));
   return {
     status: user.verificationStatus,
     label: verificationLabels[user.verificationStatus],
-    canUseMatching: user.verificationStatus === "verified",
-    canUseChat: user.verificationStatus === "verified"
+    canUseMatching: accepted,
+    canUseChat: accepted
   };
 }
 
 export async function startMockVerification(
   userId: string
 ): Promise<VerificationResult> {
+  assertMockVerificationEnabled();
   const user = await repositories.users.findById(userId);
 
   if (!user) {
@@ -83,6 +86,7 @@ export async function completeMockVerification(
   userId: string,
   input: MockVerificationInput
 ): Promise<VerificationResult> {
+  assertMockVerificationEnabled();
   if (!input.legalName || !input.birthDate || !input.gender || !input.phoneNumber) {
     throw Object.assign(new Error("Mock verification input is incomplete."), {
       statusCode: 400
@@ -123,6 +127,7 @@ export async function submitMockVerification(
   userId: string,
   input: MockVerificationInput
 ): Promise<VerificationResult> {
+  assertMockVerificationEnabled();
   const user = await repositories.users.findById(userId);
 
   if (!user) {
