@@ -15,8 +15,8 @@ export async function getMyPet(userId: string): Promise<PetResponse | null> {
 export async function selectPet(userId: string, input: unknown): Promise<PetResponse> {
   if (!input || typeof input !== "object" || Array.isArray(input) ||
       Object.keys(input).some(key => key !== "petType") ||
-      !["healthy", "night", "hearty"].includes((input as { petType: string }).petType)) {
-    throw Object.assign(new Error("petType must be healthy, night or hearty."), { statusCode: 400 });
+      !["healthy", "night", "hearty", "dog", "cat"].includes((input as { petType: string }).petType)) {
+    throw Object.assign(new Error("petType must be healthy, night, hearty, dog or cat."), { statusCode: 400 });
   }
   return response(await repositories.pets.create(userId, (input as { petType: PetType }).petType));
 }

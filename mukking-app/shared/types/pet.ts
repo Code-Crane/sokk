@@ -1,4 +1,4 @@
-export type PetType = "healthy" | "night" | "hearty";
+export type PetType = "healthy" | "night" | "hearty" | "dog" | "cat";
 export type PetGrowthStage = "꼬마" | "새싹 친구" | "단골 친구" | "식탁 친구" | "먹킹 마스터";
 export type PetXpSource = "matching_completed" | "hosted_matching_completed" | "manner_rating_completed";
 export interface UserPet {
