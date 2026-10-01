@@ -651,7 +651,7 @@ void main() {
     await tester.pumpWidget(
       const ProviderScope(child: MukkingApp()),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(discoverySearchFieldKey), ' 멘 야 ');
@@ -689,7 +689,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('discovery-category-치킨')), findsNothing);
@@ -731,7 +731,7 @@ void main() {
       ),
     );
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.drag(find.byType(ListView).first, const Offset(0, -540));
@@ -773,7 +773,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
@@ -798,6 +798,9 @@ void main() {
     container
         .read(discoveryFilterProvider.notifier)
         .selectSort(RestaurantSortOption.favoriteFirst);
+    // Compact filter controls scroll horizontally on narrow layouts.
+    await tester.ensureVisible(find.byKey(clearDiscoveryFiltersKey));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(clearDiscoveryFiltersKey));
     await tester.pump();
     final resetFilter = container.read(discoveryFilterProvider);
@@ -817,7 +820,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
     filteredContainer
         .read(discoveryFilterProvider.notifier)
@@ -844,7 +847,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView).first, const Offset(0, -540));
     await tester.pumpAndSettle();
@@ -862,7 +865,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
 
     await tester.tap(

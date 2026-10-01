@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'reference_visual_capture.dart';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mukking_flutter_app/core/network/api_client.dart';
 import 'package:mukking_flutter_app/core/network/api_error.dart';
+import 'package:mukking_flutter_app/core/theme/brand_assets.dart';
 import 'package:mukking_flutter_app/features/auth/domain/auth_user.dart';
 import 'package:mukking_flutter_app/features/auth/providers/auth_provider.dart';
 import 'package:mukking_flutter_app/features/chat/data/chat_repository.dart';
@@ -115,7 +117,15 @@ MatchingParty party() => MatchingParty(
 Future<GoRouter> mount(WidgetTester tester, FakeChat repo,
     {String path = '/chat?roomId=r',
     FakeSafety? safety,
-    bool withParty = false}) async {
+    bool withParty = false,
+    double? width,
+    double textScale = 1}) async {
+  if (width != null) {
+    tester.view.physicalSize = Size(width, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+  }
   GoRouter.optionURLReflectsImperativeAPIs = true;
   final router = GoRouter(initialLocation: path, routes: [
     GoRoute(
@@ -128,18 +138,33 @@ Future<GoRouter> mount(WidgetTester tester, FakeChat repo,
             Scaffold(body: Text('party:${state.pathParameters['id']}'))),
   ]);
   addTearDown(router.dispose);
-  await tester.pumpWidget(ProviderScope(overrides: [
-    currentUserProvider
-        .overrideWithValue(AuthUser.fallback(id: 'me', email: '')),
-    chatRepositoryProvider.overrideWithValue(repo),
-    chatSafetyRepositoryProvider.overrideWithValue(safety ?? FakeSafety()),
-    partyByIdProvider
-        .overrideWith((ref, id) async => withParty ? party() : null),
-  ], child: MaterialApp.router(routerConfig: router)));
+  await tester.pumpWidget(ProviderScope(
+      overrides: [
+        currentUserProvider
+            .overrideWithValue(AuthUser.fallback(id: 'me', email: '')),
+        chatRepositoryProvider.overrideWithValue(repo),
+        chatSafetyRepositoryProvider.overrideWithValue(safety ?? FakeSafety()),
+        partyByIdProvider
+            .overrideWith((ref, id) async => withParty ? party() : null),
+      ],
+      child: RepaintBoundary(
+          key: const Key('chat-capture'),
+          child: MaterialApp.router(
+            theme:
+                referenceCapture ? ThemeData(fontFamily: 'ReferenceQA') : null,
+            routerConfig: router,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(textScale),
+              ),
+              child: child!,
+            ),
+          ))));
   return router;
 }
 
 void main() {
+  setUpAll(loadReferenceFonts);
   test('moderation error uses safe message without exposing server details',
       () {
     expect(
@@ -169,7 +194,7 @@ void main() {
             .enabled,
         false);
     expect(find.byTooltip('이 메시지 신고'), findsOneWidget);
-    await tester.tap(find.text('신고 / 차단'));
+    await tester.tap(find.byTooltip('신고 / 차단'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('차단 해제'));
     await tester.pumpAndSettle();
@@ -231,9 +256,50 @@ void main() {
     final align = tester.widget<Align>(
         find.ancestor(of: bubble, matching: find.byType(Align)).first);
     expect(align.alignment, Alignment.centerRight);
+    final surface = tester.widget<Container>(bubble);
+    expect((surface.decoration as BoxDecoration).color, MukkingBrand.green);
     expect(find.text('나'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final layout in [(390.0, 1.0), (360.0, 1.0), (360.0, 1.8)]) {
+    testWidgets(
+        'chat room ${layout.$1}px scale ${layout.$2} wraps long Korean content',
+        (tester) async {
+      final repo = FakeChat()
+        ..rooms = [
+          ChatRoom(
+              id: 'r',
+              postId: 'p',
+              title: '아주 긴 우리 동네 함께 먹는 저녁 모임 채팅방 이름',
+              participantIds: const ['me', 'other'],
+              status: 'active',
+              updatedAt: DateTime(2026, 9, 5))
+        ]
+        ..messages = [
+          message('long-responsive',
+              text: '긴 한국어 메시지가 여러 줄로 자연스럽게 표시되는지 확인합니다. ' * 8)
+        ];
+      await mount(
+        tester,
+        repo,
+        path: '/chat',
+        width: layout.$1,
+        textScale: layout.$2,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('room-r')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await captureReference(tester, find.byKey(const Key('chat-capture')),
+          'chat-${layout.$1}-${layout.$2}');
+      await tester.tap(find.byKey(const ValueKey('room-r')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('message-long-responsive')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-draft')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('refresh failure retains history without pretending empty',
       (tester) async {
@@ -305,6 +371,7 @@ void main() {
     final router = await mount(tester, repo, path: '/chat');
     await tester.pumpAndSettle();
     expect(find.text('아직 참여 중인 채팅이 없어요.'), findsOneWidget);
+    expect(find.bySemanticsLabel('먹킹'), findsWidgets);
     router.go('/chat?roomId=missing');
     await tester.pumpAndSettle();
     expect(find.textContaining('참여 권한'), findsOneWidget);
@@ -407,12 +474,12 @@ void main() {
     final safety = FakeSafety();
     await mount(tester, FakeChat(), safety: safety);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('신고 / 차단'));
+    await tester.tap(find.byTooltip('신고 / 차단'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('신고 제출'));
     await tester.pumpAndSettle();
     expect(safety.reports, 1);
-    await tester.tap(find.text('신고 / 차단'));
+    await tester.tap(find.byTooltip('신고 / 차단'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('차단하기'));
     await tester.pumpAndSettle();

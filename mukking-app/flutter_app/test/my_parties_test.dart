@@ -82,7 +82,7 @@ void main() {
 
     expect(find.byKey(myPartiesCardKey), findsOneWidget);
     expect(find.text('내가 만든 모임'), findsOneWidget);
-    expect(find.text('참여 확정'), findsOneWidget);
+    expect(find.text('참여하는 모임'), findsOneWidget);
     expect(find.byKey(myAuthoredPartyKey('authored')), findsOneWidget);
     expect(find.byKey(myConfirmedPartyKey('confirmed')), findsOneWidget);
 

@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +30,106 @@ import 'package:mukking_flutter_app/features/matching/providers/matching_provide
 import 'package:mukking_flutter_app/main.dart';
 
 void main() {
+  setUpAll(() async {
+    if (!const bool.fromEnvironment('PARTY_CAPTURE')) return;
+    for (final family in ['Roboto', 'Ahem']) {
+      await (FontLoader(family)
+            ..addFont(File('C:/Windows/Fonts/malgun.ttf')
+                .readAsBytes()
+                .then((b) => ByteData.sublistView(b))))
+          .load();
+    }
+    await (FontLoader('MaterialIcons')
+          ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf')))
+        .load();
+  });
+
+  for (final size in [(390.0, 1.0), (360.0, 1.0), (360.0, 1.8)]) {
+    testWidgets('party redesign ${size.$1}px scale ${size.$2}', (tester) async {
+      tester.view.physicalSize = Size(size.$1, 844);
+      tester.view.devicePixelRatio = 1;
+      tester.platformDispatcher.textScaleFactorTestValue = size.$2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final repository =
+          _MatchingRepository(party: _party(longText: size.$2 > 1));
+      final container = _container(repository, const _ChatRepository());
+      addTearDown(container.dispose);
+      await _pumpRoute(tester, container, AppRoutes.partyDetailPath('party-1'));
+      expect(find.byTooltip('신고/차단 메뉴'), findsNothing);
+      expect(find.textContaining('placeholder'), findsNothing);
+      expect(find.text('획득 가능한 보상'), findsNothing);
+      expect(tester.takeException(), isNull);
+      await _captureParty(tester, 'party-${size.$1.toInt()}-${size.$2}');
+      await _scrollTo(tester, find.byKey(partyJoinButtonKey));
+      expect(find.byKey(partyJoinButtonKey).hitTestable(), findsOneWidget);
+      await tester.tap(find.byKey(partyJoinButtonKey));
+      await tester.pumpAndSettle();
+      expect(repository.joinCalls, 1);
+      expect(find.byKey(partyPendingButtonKey), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await _captureParty(tester, 'pending-${size.$1.toInt()}-${size.$2}');
+    });
+  }
+
+  testWidgets('restaurant entry uses the existing detail route and back',
+      (tester) async {
+    final container = _container(
+        _MatchingRepository(party: _party()), const _ChatRepository());
+    addTearDown(container.dispose);
+    await _pumpRoute(tester, container, AppRoutes.partyDetailPath('party-1'));
+    await tester.tap(find.byKey(partyRestaurantButtonKey));
+    await tester.pumpAndSettle();
+    final router = container.read(appRouterProvider);
+    expect(router.routerDelegate.currentConfiguration.last.matchedLocation,
+        AppRoutes.restaurantDetailPath('restaurant-1'));
+    router.pop();
+    await tester.pumpAndSettle();
+    expect(find.byKey(partyDetailPageKey), findsOneWidget);
+  });
+
+  testWidgets('full party has neutral disabled CTA without join',
+      (tester) async {
+    final container = _container(
+        _MatchingRepository(
+            party: _party(status: MatchingPartyStatus.full, currentMembers: 4)),
+        const _ChatRepository());
+    addTearDown(container.dispose);
+    await _pumpRoute(tester, container, AppRoutes.partyDetailPath('party-1'));
+    expect(find.byKey(partyJoinButtonKey), findsNothing);
+    expect(find.text('0자리'), findsOneWidget);
+    await _scrollTo(tester, find.text('모집이 마감됐어요'));
+    expect(find.text('모집이 마감됐어요'), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(
+                find.widgetWithText(FilledButton, '모집이 마감됐어요'))
+            .onPressed,
+        isNull);
+  });
+
+  testWidgets('author management fits 360px with large text and real requests',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 844);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final container = _container(
+        _MatchingRepository(
+            party: _party(longText: true), requests: [_request()]),
+        const _ChatRepository(),
+        userId: 'host');
+    addTearDown(container.dispose);
+    await _pumpRoute(tester, container, AppRoutes.partyDetailPath('party-1'));
+    await _scrollTo(tester, find.byKey(approveJoinRequestKey('request-1')));
+    expect(find.byKey(rejectJoinRequestKey('request-1')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await _captureParty(tester, 'host-360-large');
+  });
+
   group('party viewer state', () {
     test('uses author, pending, approved, available and full states', () {
       final open = _party();
@@ -175,10 +278,12 @@ void main() {
           await _scrollTo(tester, find.byKey(partyChatButtonKey));
           expect(find.byKey(partyChatButtonKey), findsOneWidget);
         case MatchingJoinRequestStatus.rejected:
+          await _scrollTo(tester, find.text('참여 신청 거절됨'));
           expect(find.text('참여 신청 거절됨'), findsOneWidget);
           await _scrollTo(tester, find.byKey(partyJoinButtonKey));
           expect(find.byKey(partyJoinButtonKey), findsOneWidget);
         case MatchingJoinRequestStatus.cancelled:
+          await _scrollTo(tester, find.text('참여 신청 취소됨'));
           expect(find.text('참여 신청 취소됨'), findsOneWidget);
           await _scrollTo(tester, find.byKey(partyJoinButtonKey));
           expect(find.byKey(partyJoinButtonKey), findsOneWidget);
@@ -200,6 +305,7 @@ void main() {
     expect(find.text('부산 중구 실제로 1'), findsWidgets);
     expect(find.text('9/10 19:30'), findsOneWidget);
     expect(find.text('1/4명'), findsOneWidget);
+    await _scrollTo(tester, find.text('신청 가능'));
     expect(find.text('신청 가능'), findsOneWidget);
     await _scrollTo(tester, find.byKey(partyJoinButtonKey));
     expect(find.byKey(partyJoinButtonKey), findsOneWidget);
@@ -423,6 +529,7 @@ void main() {
     addTearDown(container.dispose);
     await _pumpRoute(tester, container, AppRoutes.partyDetailPath('party-1'));
 
+    await _scrollTo(tester, find.text('참여 승인됨'));
     expect(find.text('참여 승인됨'), findsOneWidget);
     await _scrollTo(tester, find.byKey(partyChatButtonKey));
     expect(find.byKey(partyChatButtonKey), findsOneWidget);
@@ -514,7 +621,8 @@ Future<void> _pumpRoute(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MukkingApp(),
+      child: const RepaintBoundary(
+          key: ValueKey('party-capture'), child: MukkingApp()),
     ),
   );
   container.read(appRouterProvider).go(location);
@@ -528,6 +636,20 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pumpAndSettle();
+}
+
+Future<void> _captureParty(WidgetTester tester, String name) async {
+  if (!const bool.fromEnvironment('PARTY_CAPTURE')) return;
+  await tester.runAsync(() async {
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(const ValueKey('party-capture')));
+    final image = await boundary.toImage();
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final file = File('build/party_detail_qa/$name.png');
+    await file.parent.create(recursive: true);
+    await file.writeAsBytes(bytes!.buffer.asUint8List());
+    image.dispose();
+  });
 }
 
 AuthUser _user(String id) {
@@ -544,6 +666,7 @@ AuthUser _user(String id) {
 }
 
 MatchingParty _party({
+  bool longText = false,
   MatchingPartyStatus status = MatchingPartyStatus.open,
   List<String> participantIds = const [],
   int currentMembers = 1,
@@ -552,8 +675,11 @@ MatchingParty _party({
     id: 'party-1',
     hostUserId: 'host',
     restaurantId: 'restaurant-1',
-    restaurantName: '실제 API 식당',
-    address: '부산 중구 실제로 1',
+    restaurantName:
+        longText ? '함께 먹고 싶은 아주 길고 긴 이름의 우리 동네 따뜻한 한식 식당' : '실제 API 식당',
+    address: longText
+        ? '부산광역시 중구 오래도록 함께 걷고 싶은 아주 긴 도로명 주소 123번길 456'
+        : '부산 중구 실제로 1',
     title: '저녁 같이 먹어요',
     scheduledAt: DateTime(2026, 9, 10, 19, 30),
     currentMembers: currentMembers,
@@ -562,10 +688,12 @@ MatchingParty _party({
     rewardXp: 80,
     rewardPoints: 400,
     status: status,
-    hostName: '파티장',
+    hostName: longText ? '아주 길고 긴 닉네임을 사용하는 테스트 방장' : '파티장',
     memberNames: const ['파티장'],
     tags: const ['실제API', 'open'],
-    description: '부담 없이 같이 식사해요.',
+    description: longText
+        ? '서로 배려하며 즐겁게 식사하고 싶은 분들과 함께해요. 긴 한국어 소개도 자연스럽게 줄바꿈되어 읽을 수 있도록 검증하는 테스트 문장입니다.'
+        : '부담 없이 같이 식사해요.',
     participantIds: participantIds,
   );
 }

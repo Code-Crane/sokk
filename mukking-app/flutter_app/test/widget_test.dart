@@ -34,9 +34,9 @@ void main() {
       ),
     );
 
-    expect(find.text('먹킹'), findsWidgets);
+    expect(find.text('오늘 뭐 먹지?'), findsOneWidget);
     expect(find.text('홈'), findsOneWidget);
-    expect(find.text('발견'), findsOneWidget);
+    expect(find.text('탐색'), findsOneWidget);
   });
 
   testWidgets('mock discovery renders restaurants and latest fields',
@@ -46,7 +46,7 @@ void main() {
         child: MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
 
     expect(find.text('Kakao Map 설정 필요'), findsOneWidget);
@@ -67,7 +67,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
 
     final marker = find.byKey(
@@ -115,7 +115,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView).first, const Offset(0, -500));
     await tester.pumpAndSettle();
@@ -127,6 +127,8 @@ void main() {
     expect(card, findsOneWidget);
     expect(find.text('라멘 · 800m'), findsWidgets);
 
+    await tester.ensureVisible(card);
+    await tester.pumpAndSettle();
     await tester.tap(card);
     await tester.pumpAndSettle();
 
@@ -160,7 +162,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView).first, const Offset(0, -500));
     await tester.pumpAndSettle();
@@ -328,7 +330,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
 
     expect(
@@ -346,7 +348,7 @@ void main() {
         child: MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
 
     expect(find.byKey(fullscreenMapButtonKey), findsOneWidget);
@@ -397,7 +399,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
     expect(find.byKey(searchThisAreaButtonKey), findsNothing);
 

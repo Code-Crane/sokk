@@ -35,13 +35,15 @@ async function main() {
     check((await api("/api/pets/me")).status === 401, "read requires auth");
     check((await api("/api/pets/me", null, { petType: "healthy" })).status === 401, "selection requires auth");
     const users = [];
-    for (const type of ["healthy", "night", "hearty"]) {
+    for (const type of ["healthy", "night", "hearty", "dog", "cat"]) {
       const u = await user(type); users.push(u);
       const empty = await api("/api/pets/me", u.token);
       check(empty.status === 200 && empty.data === null, "no pet returns null " + type);
       const pet = await api("/api/pets/me", u.token, { petType: type });
       check(pet.status === 201 && pet.data.userId === u.id && pet.data.petType === type && pet.data.level === 1 && pet.data.xp === 0, "select " + type);
       check((await api("/api/pets/me", u.token, { petType: type })).status === 409, "no species overwrite " + type);
+      check((await api("/api/pets/me", u.token)).data.petType === type, "restore unchanged type " + type);
+      check((await api("/api/pets/me", u.token, { petType: type === "dog" ? "cat" : "dog" })).status === 409, "cannot replace existing pet " + type);
     }
     const [host, guest, other] = users;
     for (const input of [{}, {petType:"fake"}, {petType:"healthy",xp:999}, {petType:"healthy",userId:guest.id}, []]) {

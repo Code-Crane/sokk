@@ -1,4 +1,8 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +23,175 @@ import 'package:mukking_flutter_app/features/matching/providers/matching_provide
 import 'package:mukking_flutter_app/main.dart';
 
 void main() {
+  for (final config in [(390.0, 1.0), (360.0, 1.0), (360.0, 1.8)]) {
+    testWidgets(
+        'detail layout ${config.$1}px scale ${config.$2} with many parties',
+        (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = Size(config.$1, 844);
+      tester.platformDispatcher.textScaleFactorTestValue = config.$2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final large = config.$2 > 1;
+      final restaurant = _restaurant().copyWith(
+        name: large ? '함께 먹고 싶은 아주 길고 긴 이름의 따뜻한 우리 동네 한식 식당' : '따뜻한 한 끼 식당',
+        roadAddress: large
+            ? '부산광역시 중구 오래도록 함께 걷고 싶은 아주 긴 도로명 주소 123번길 456'
+            : '부산 중구 테스트로 1',
+      );
+      final container = _container(
+          _RestaurantRepository(restaurant: restaurant),
+          _MatchingRepository(
+              [for (var i = 0; i < 6; i++) _party('모임 $i', restaurant.id)]));
+      addTearDown(container.dispose);
+      await _pumpApp(tester, container);
+      container
+          .read(appRouterProvider)
+          .go(AppRoutes.restaurantDetailPath(restaurant.id));
+      await tester.pumpAndSettle();
+      expect(find.byKey(restaurantDetailImageFallbackKey), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await _captureDetail(tester, 'detail-${config.$1.toInt()}-${config.$2}');
+      await tester.ensureVisible(find.byKey(restaurantDetailBrowsePartiesKey));
+      await tester.pumpAndSettle();
+      expect(find.byKey(restaurantDetailBrowsePartiesKey).hitTestable(),
+          findsOneWidget);
+      await tester.tap(find.byKey(restaurantDetailBrowsePartiesKey));
+      await tester.pumpAndSettle();
+      expect(find.text('모집 중인 동행').hitTestable(), findsOneWidget);
+      await _captureDetail(tester, 'parties-${config.$1.toInt()}-${config.$2}');
+      await tester
+          .ensureVisible(find.byKey(restaurantDetailPartyCardKey('모임 5')));
+      await tester.pumpAndSettle();
+      expect(find.text('현재 모집 중 6개'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      expect(
+          tester
+              .widget<NavigationBar>(find.byType(NavigationBar))
+              .destinations
+              .length,
+          4);
+    });
+  }
+
+  testWidgets('empty parties expose one primary create action', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final container = _container(
+        _RestaurantRepository(restaurant: _restaurant()),
+        _MatchingRepository(const []));
+    addTearDown(container.dispose);
+    await _pumpApp(tester, container);
+    container
+        .read(appRouterProvider)
+        .go(AppRoutes.restaurantDetailPath('restaurant-detail'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(restaurantDetailBrowsePartiesKey), findsNothing);
+    expect(find.text('먼저 동행을 모집해볼까요?'), findsOneWidget);
+    expect(find.text('동행 모집하기'), findsOneWidget);
+    expect(find.byType(FilledButton), findsOneWidget);
+    await tester
+        .ensureVisible(find.byKey(restaurantDetailCreatePartyButtonKey));
+    await _captureDetail(tester, 'empty');
+    await tester.tap(find.byKey(restaurantDetailCreatePartyButtonKey));
+    await tester.pumpAndSettle();
+    expect(
+        container
+            .read(appRouterProvider)
+            .routerDelegate
+            .currentConfiguration
+            .uri
+            .queryParameters['restaurantId'],
+        'restaurant-detail');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('detail network retry reloads only its existing source',
+      (tester) async {
+    var attempts = 0;
+    final repository = _RestaurantRepository(
+        restaurant: _restaurant(),
+        includeInList: false,
+        onGetById: (_) async {
+          if (++attempts == 1) {
+            throw const ApiError(
+                kind: ApiErrorKind.network, userMessage: '연결을 확인해주세요.');
+          }
+          return _restaurant();
+        });
+    final container = _container(repository, _MatchingRepository(const []));
+    addTearDown(container.dispose);
+    await _pumpApp(tester, container);
+    container
+        .read(appRouterProvider)
+        .go(AppRoutes.restaurantDetailPath('restaurant-detail'));
+    await tester.pumpAndSettle();
+    expect(find.text('연결을 확인해주세요.'), findsOneWidget);
+    await tester.tap(find.byKey(restaurantDetailRetryButtonKey));
+    await tester.pumpAndSettle();
+    expect(attempts, 2);
+    expect(find.byKey(restaurantDetailPageKey), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('favorite failure restores real provider state and reports error',
+      (tester) async {
+    final container = _container(
+        _RestaurantRepository(restaurant: _restaurant(), failFavorite: true),
+        _MatchingRepository(const []));
+    addTearDown(container.dispose);
+    await _pumpApp(tester, container);
+    container
+        .read(appRouterProvider)
+        .go(AppRoutes.restaurantDetailPath('restaurant-detail'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(restaurantDetailFavoriteButtonKey));
+    await tester.pumpAndSettle();
+    expect(
+        container
+            .read(restaurantDetailProvider('restaurant-detail'))
+            .valueOrNull
+            ?.isFavorite,
+        isFalse);
+    expect(find.text('찜 상태를 변경하지 못했어요.'), findsOneWidget);
+  });
+
+  testWidgets('real photo URL uses image and safely falls back on failure',
+      (tester) async {
+    final container = _container(
+        _RestaurantRepository(
+            restaurant: _restaurant().copyWith(
+                imageUrl: 'https://example.invalid/real-restaurant.jpg')),
+        _MatchingRepository(const []));
+    addTearDown(container.dispose);
+    await _pumpApp(tester, container);
+    container
+        .read(appRouterProvider)
+        .go(AppRoutes.restaurantDetailPath('restaurant-detail'));
+    await tester.pumpAndSettle();
+    final image = tester.widget<Image>(find.byKey(restaurantDetailImageKey));
+    expect((image.image as NetworkImage).url,
+        'https://example.invalid/real-restaurant.jpg');
+    expect(find.byKey(restaurantDetailImageFallbackKey), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  setUpAll(() async {
+    if (!const bool.fromEnvironment('DETAIL_CAPTURE')) return;
+    for (final family in ['Roboto', 'Ahem']) {
+      await (FontLoader(family)
+            ..addFont(File('C:/Windows/Fonts/malgun.ttf')
+                .readAsBytes()
+                .then((b) => ByteData.sublistView(b))))
+          .load();
+    }
+    await (FontLoader('MaterialIcons')
+          ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf')))
+        .load();
+  });
   testWidgets('direct restaurant route reloads real fields and filters parties',
       (tester) async {
     final restaurantRepository = _RestaurantRepository(
@@ -57,7 +230,7 @@ void main() {
     expect(find.text('부산 중구 테스트로 1'), findsOneWidget);
     expect(find.text('051-123-4567'), findsOneWidget);
     expect(find.text('1.4km'), findsOneWidget);
-    expect(find.text('모집 중인 모임'), findsOneWidget);
+    expect(find.text('모집 중인 동행'), findsOneWidget);
     expect(find.text('현재 모집 중 1개'), findsOneWidget);
     expect(find.text('남은 자리 2'), findsOneWidget);
     expect(find.text('모임 상세 보기'), findsOneWidget);
@@ -113,7 +286,7 @@ void main() {
     expect(find.text('부산 중구 지번 2'), findsOneWidget);
     expect(find.byKey(restaurantDetailPhoneButtonKey), findsNothing);
     expect(find.byKey(restaurantDetailPlaceButtonKey), findsNothing);
-    expect(find.text('현재 모집 중인 모임이 없어요.'), findsOneWidget);
+    expect(find.text('아직 모집 중인 동행이 없어요'), findsOneWidget);
   });
 
   testWidgets('party and create actions keep their restaurant identifiers',
@@ -162,7 +335,8 @@ void main() {
           .queryParameters['restaurantId'],
       'restaurant-detail',
     );
-    expect(find.textContaining('상세 테스트 식당에서 열 파티'), findsOneWidget);
+    expect(find.text('함께 먹을 식당'), findsOneWidget);
+    expect(find.text('상세 테스트 식당'), findsOneWidget);
   });
 
   testWidgets('favorite change converges across detail and restaurant feed',
@@ -229,6 +403,21 @@ void main() {
   });
 }
 
+// Test-only render fixtures; never used by the runtime app.
+Future<void> _captureDetail(WidgetTester tester, String name) async {
+  if (!const bool.fromEnvironment('DETAIL_CAPTURE')) return;
+  await tester.runAsync(() async {
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(const ValueKey('detail-capture')));
+    final image = await boundary.toImage();
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final file = File('build/restaurant_detail_qa/$name.png');
+    await file.parent.create(recursive: true);
+    await file.writeAsBytes(bytes!.buffer.asUint8List());
+    image.dispose();
+  });
+}
+
 ProviderContainer _container(
   RestaurantRepository restaurantRepository,
   MatchingRepository matchingRepository, {
@@ -251,7 +440,8 @@ Future<void> _pumpApp(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MukkingApp(),
+      child: const RepaintBoundary(
+          key: ValueKey('detail-capture'), child: MukkingApp()),
     ),
   );
   await tester.pumpAndSettle();
@@ -314,12 +504,14 @@ class _RestaurantRepository implements RestaurantRepository {
     required this.restaurant,
     this.includeInList = true,
     this.onGetById,
+    this.failFavorite = false,
   });
 
   Restaurant restaurant;
   final bool includeInList;
   final Future<Restaurant?> Function(String restaurantId)? onGetById;
   int getByIdCalls = 0;
+  final bool failFavorite;
 
   @override
   Future<List<Restaurant>> discover(RestaurantDiscoverRequest request) =>
@@ -346,6 +538,7 @@ class _RestaurantRepository implements RestaurantRepository {
     Restaurant restaurant,
     bool isFavorite,
   ) async {
+    if (failFavorite) throw StateError('Test favorite failure');
     this.restaurant = restaurant.copyWith(isFavorite: isFavorite);
     return this.restaurant;
   }

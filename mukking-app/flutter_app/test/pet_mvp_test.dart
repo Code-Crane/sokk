@@ -10,6 +10,7 @@ import 'package:mukking_flutter_app/core/network/api_client.dart';
 import 'package:mukking_flutter_app/core/router/app_routes.dart';
 import 'package:mukking_flutter_app/core/router/app_router.dart';
 import 'package:mukking_flutter_app/core/theme/app_theme.dart';
+import 'package:mukking_flutter_app/core/theme/brand_assets.dart';
 import 'package:mukking_flutter_app/core/theme/theme_tokens.dart';
 import 'package:mukking_flutter_app/features/auth/domain/auth_user.dart';
 import 'package:mukking_flutter_app/features/auth/providers/auth_provider.dart';
@@ -80,6 +81,17 @@ Future<GoRouter> mount(WidgetTester tester, FakePets repository,
 }
 
 void main() {
+  testWidgets('single mascot replaces selection without writing a pet', (tester) async {
+    final repo = FakePets();
+    await mount(tester, repo);
+    expect(find.byType(MukkingMascot), findsOneWidget);
+    expect(find.text('먹킹과 함께할 준비 중이에요.'), findsOneWidget);
+    for (final type in PetType.values) {
+      expect(find.text('${type.label} 선택'), findsNothing);
+    }
+    expect(repo.writes, 0);
+    expect(tester.takeException(), isNull);
+  });
   test('production router registers pet direct path', () {
     final c = ProviderContainer();
     addTearDown(c.dispose);
@@ -181,65 +193,84 @@ void main() {
     expect(repo.reads, 0);
   });
   for (final type in PetType.values) {
-    testWidgets('canonical asset and confirmed selection ${type.name}',
+    testWidgets(
+        'parse and restore original type with available art ${type.name}',
         (tester) async {
-      final bytes = await rootBundle.load(type.assetForStage('꼬마'));
-      expect(bytes.lengthInBytes, greaterThan(0));
-      expect(type.assetForStage('먹킹 마스터'), type.assetForStage('꼬마'));
-      final repo = FakePets();
-      await mount(tester, repo);
-      await tester.scrollUntilVisible(find.text('${type.label} 선택'), 250);
-      await tester.ensureVisible(find.text('${type.label} 선택'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('${type.label} 선택'));
-      await tester.pumpAndSettle();
-      expect(find.text('${type.label}와 함께할까요?'), findsOneWidget);
-      expect(repo.writes, 0);
-      await tester.tap(find.text('함께하기'));
-      await tester.pumpAndSettle();
-      expect(repo.writes, 1);
-      expect(repo.pet?.type, type);
-      expect(find.text('Lv. 2 · 꼬마'), findsOneWidget);
+      final pet = fixture(type);
+      expect(pet.type, type);
+      expect(pet.xp, 150);
+      expect((await rootBundle.load(type.assetForStage('꼬마'))).lengthInBytes,
+          greaterThan(0));
+      if (type.isLegacy) {
+        expect(type.assetForMood(), 'assets/pets/dog/dog_happy.png');
+      }
+      await mount(tester, FakePets()..pet = pet);
+      expect(tester.widget<PetImage>(find.byType(PetImage)).type, type);
+      expect(tester.widget<PetImage>(find.byType(PetImage)).mascotAsset,
+          BrandAssets.defaultMascot);
       expect(tester.takeException(), isNull);
     });
   }
-  testWidgets('MY empty CTA opens selection and back returns MY',
-      (tester) async {
+  for (final type in PetType.selectable) {
+    test('API saves and restores ${type.name} without legacy conversion',
+        () async {
+      final dio = Dio(BaseOptions(baseUrl: 'http://localhost:4000'));
+      Map<String, dynamic>? saved;
+      dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
+        if (options.method == 'POST') {
+          expect(options.path, '/api/pets/me');
+          expect(options.data, {'petType': type.name});
+          saved = dto(type);
+        }
+        handler.resolve(
+            Response(requestOptions: options, statusCode: 200, data: saved));
+      }));
+      final repo = ApiPetRepository(ApiClient(dio));
+      expect((await repo.select(type)).type, type);
+      expect((await ApiPetRepository(ApiClient(dio)).getMe())?.type, type);
+      dio.close();
+    });
+    for (final mood in PetMood.values) {
+      testWidgets('bundled ${type.name} ${mood.name} pose', (tester) async {
+        expect(type.assetForMood(mood),
+            'assets/pets/${type.name}/${type.name}_${mood.name}.png');
+        expect((await rootBundle.load(type.assetForMood(mood))).lengthInBytes,
+            greaterThan(0));
+      });
+    }
+    testWidgets('saved ${type.name} uses mascot without changing type or XP', (tester) async {
+      final repo = FakePets()..pet = fixture(type);
+      await mount(tester, repo);
+      final widget = tester.widget<PetImage>(find.byType(PetImage));
+      expect(widget.type, type);
+      expect(widget.mascotAsset, BrandAssets.defaultMascot);
+      expect(repo.pet?.xp, 150);
+      expect(repo.writes, 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets('MY mascot entry and back preserve empty record', (tester) async {
     final repo = FakePets();
     await mount(tester, repo, path: '/my');
-    await tester.tap(find.text('펫 선택하기'));
+    await tester.tap(find.text('먹킹 보러가기'));
     await tester.pumpAndSettle();
-    expect(find.text('함께할 식탁 친구를 선택해주세요.'), findsOneWidget);
+    expect(find.text('먹킹과 함께할 준비 중이에요.'), findsOneWidget);
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    expect(find.text('펫 선택하기'), findsOneWidget);
-  });
-  testWidgets('selection cancel does not write', (tester) async {
-    final repo = FakePets();
-    await mount(tester, repo);
-    await tester.tap(find.text('건강이 선택'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('취소'));
-    await tester.pumpAndSettle();
+    expect(find.text('먹킹 보러가기'), findsOneWidget);
     expect(repo.writes, 0);
   });
-  testWidgets('failed selection can retry and never shows fake success',
-      (tester) async {
+  test('legacy selection service failure remains retryable', () async {
     final repo = FakePets()..failWrite = true;
-    await mount(tester, repo);
-    await tester.tap(find.text('건강이 선택'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('함께하기'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('펫 선택을 완료하지 못했어요'), findsOneWidget);
+    final c = ProviderContainer(overrides: overrides(repo));
+    addTearDown(c.dispose);
+    final subscription = c.listen(selectPetProvider, (_, __) {});
+    addTearDown(subscription.close);
+    expect(await c.read(selectPetProvider.notifier).select(PetType.dog), false);
     expect(repo.pet, isNull);
     repo.failWrite = false;
-    await tester.ensureVisible(find.text('건강이 선택'));
-    await tester.tap(find.text('건강이 선택'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('함께하기'));
-    await tester.pumpAndSettle();
-    expect(repo.pet, isNotNull);
+    expect(await c.read(selectPetProvider.notifier).select(PetType.dog), true);
+    expect(repo.pet?.type, PetType.dog);
   });
   testWidgets('direct load failure retry reads server state', (tester) async {
     final repo = FakePets()..failRead = true;
@@ -261,7 +292,7 @@ void main() {
     final repo = FakePets()..pet = fixture();
     await mount(tester, repo, path: '/my');
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('내 펫 자세히 보기'));
+      await tester.tap(find.text('펫 보러가기'));
     await tester.pumpAndSettle();
     expect(find.text('다음 성장: Lv. 5 새싹 친구'), findsOneWidget);
     expect(tester.takeException(), isNull);

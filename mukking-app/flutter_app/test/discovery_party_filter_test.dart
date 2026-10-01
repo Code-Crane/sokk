@@ -396,7 +396,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
     container.read(discoveryFilterProvider.notifier)
       ..updateQuery('멘야')
@@ -445,7 +445,7 @@ void main() {
         child: const MukkingApp(),
       ),
     );
-    await tester.tap(find.text('발견'));
+    await tester.tap(find.text('탐색'));
     await tester.pumpAndSettle();
     container.read(discoveryPartyFilterProvider.notifier).apply(
           const DiscoveryPartyFilterState(date: PartyDateFilter.today),
