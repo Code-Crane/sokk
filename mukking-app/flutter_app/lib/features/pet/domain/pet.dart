@@ -1,13 +1,27 @@
+enum PetMood { happy, eating, sleep }
+
 enum PetType {
   healthy('건강이', '채소와 건강한 식탁을 좋아하는 친구'),
   night('야식이', '야식과 매콤한 식탁을 좋아하는 친구'),
-  hearty('든든이', '한식과 든든한 식탁을 좋아하는 친구');
+  hearty('든든이', '한식과 든든한 식탁을 좋아하는 친구'),
+  dog('강아지', '함께 먹고 성장하는 다정한 친구'),
+  cat('고양이', '함께 먹고 성장하는 포근한 친구');
 
   const PetType(this.label, this.description);
   final String label;
   final String description;
-  // All stages share the canonical artwork in Phase 1.
-  String assetForStage(String stage) => 'assets/pets/$name.png';
+  static const selectable = [dog, cat];
+  bool get isLegacy => this != dog && this != cat;
+
+  // Image fallback only: never converts persisted type or user selection.
+  String assetForMood([PetMood mood = PetMood.happy]) {
+    final species = this == cat ? 'cat' : 'dog';
+    final pose = isLegacy ? PetMood.happy : mood;
+    return 'assets/pets/$species/${species}_${pose.name}.png';
+  }
+
+  // Growth stages do not imply a feeding/sleeping state.
+  String assetForStage(String stage) => assetForMood();
 }
 
 class Pet {

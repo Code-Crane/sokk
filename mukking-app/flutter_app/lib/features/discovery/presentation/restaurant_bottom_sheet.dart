@@ -4,8 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/router/app_routes.dart';
 import '../../../core/platform/external_url_launcher.dart';
+import '../../../core/theme/brand_assets.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../widgets/mukking_card.dart';
+import 'discovery_visuals.dart';
 import '../../matching/domain/matching_party.dart';
 import '../../matching/providers/matching_provider.dart';
 import '../domain/restaurant.dart';
@@ -25,6 +26,7 @@ Future<void> showRestaurantDetailsSheet(
     isScrollControlled: true,
     useSafeArea: true,
     showDragHandle: true,
+    backgroundColor: MukkingBrand.surface,
     builder: (_) => _RestaurantDetailsSheet(restaurantId: restaurantId),
   );
 }
@@ -72,6 +74,13 @@ class RestaurantBottomSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    return DiscoveryTheme(
+        child: Builder(
+      builder: (context) => _buildContent(context, ref),
+    ));
+  }
+
+  Widget _buildContent(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
     final partiesAsync = ref.watch(partiesByRestaurantProvider(restaurant.id));
     final parties = partiesAsync.valueOrNull ?? const [];
@@ -86,33 +95,15 @@ class RestaurantBottomSheet extends ConsumerWidget {
     final phone = restaurant.phone?.trim();
     final placeUri = restaurant.placeUri;
 
-    return MukkingCard(
+    return DiscoverySurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 82,
-                height: 82,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      tokens.secondary.withValues(alpha: 0.26),
-                      tokens.primary.withValues(alpha: 0.18),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(26),
-                ),
-                child: Icon(
-                  Icons.restaurant_menu_rounded,
-                  color: tokens.primary,
-                  size: 36,
-                ),
-              ),
-              const SizedBox(width: 14),
+              DiscoveryRestaurantImage(restaurant: restaurant, size: 56),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -130,7 +121,7 @@ class RestaurantBottomSheet extends ConsumerWidget {
                               ? Icons.favorite_rounded
                               : Icons.favorite_border_rounded,
                           color: restaurant.isFavorite
-                              ? tokens.favorite
+                              ? MukkingBrand.orange
                               : tokens.textSecondary,
                         ),
                       ],
@@ -139,7 +130,8 @@ class RestaurantBottomSheet extends ConsumerWidget {
                     Text(
                       [
                         if (restaurant.category.isNotEmpty) restaurant.category,
-                        restaurant.distanceLabel,
+                        if (restaurant.distanceMeters != null)
+                          restaurant.distanceLabel,
                       ].join(' · '),
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
@@ -175,7 +167,7 @@ class RestaurantBottomSheet extends ConsumerWidget {
                       data: (_) => Text(
                         '현재 모집 중 파티 ${activeParties.length}개',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: tokens.primary,
+                              color: MukkingBrand.green,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
@@ -195,15 +187,18 @@ class RestaurantBottomSheet extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
+          DiscoveryPartyPreview(restaurantId: restaurant.id),
+          const SizedBox(height: 14),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               _ActionChipButton(
                 key: restaurantViewDetailsButtonKey,
+                primary: true,
                 icon: Icons.info_outline_rounded,
-                label: '식당 자세히 보기',
+                label: '보러가기',
                 color: tokens.primary,
                 onTap: onViewDetails ??
                     () => context.push(
@@ -215,7 +210,7 @@ class RestaurantBottomSheet extends ConsumerWidget {
                   key: restaurantPlaceUrlButtonKey,
                   icon: Icons.open_in_new_rounded,
                   label: '카카오맵에서 자세히 보기',
-                  color: tokens.secondary,
+                  color: MukkingBrand.green,
                   onTap: () async {
                     try {
                       final launched =
@@ -236,7 +231,7 @@ class RestaurantBottomSheet extends ConsumerWidget {
                     ? Icons.favorite_rounded
                     : Icons.favorite_border_rounded,
                 label: restaurant.isFavorite ? '찜 취소' : '가고 싶어요',
-                color: restaurant.isFavorite ? tokens.favorite : tokens.primary,
+                color: tokens.primary,
                 onTap: () async {
                   try {
                     await ref
@@ -255,7 +250,7 @@ class RestaurantBottomSheet extends ConsumerWidget {
                 label: firstParty == null
                     ? '모집 중인 파티 없음'
                     : '모집 중 파티 ${activeParties.length}개 보기',
-                color: tokens.partyHot,
+                color: MukkingBrand.green,
                 onTap: firstParty == null
                     ? null
                     : () {
@@ -274,13 +269,6 @@ class RestaurantBottomSheet extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            restaurant.isFavorite
-                ? '찜한 식당입니다. 새 파티 알림과 홈 섹션에 반영됩니다.'
-                : '가고 싶어요를 누르면 이 식당의 파티 흐름을 홈에서 이어볼 수 있어요.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
         ],
       ),
     );
@@ -294,44 +282,31 @@ class _ActionChipButton extends StatelessWidget {
     required this.label,
     required this.color,
     required this.onTap,
+    this.primary = false,
   });
 
   final IconData icon;
   final String label;
   final Color color;
   final VoidCallback? onTap;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.tokens;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Opacity(
-        opacity: onTap == null ? 0.48 : 1,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: color.withValues(alpha: 0.38)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: onTap == null ? tokens.textSecondary : color,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    final content = Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 18),
+      const SizedBox(width: 7),
+      Flexible(child: Text(label)),
+    ]);
+    if (primary) {
+      return SizedBox(
+          width: double.infinity,
+          child: FilledButton(onPressed: onTap, child: content));
+    }
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(foregroundColor: color),
+      child: content,
     );
   }
 }

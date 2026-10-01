@@ -4,8 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_error.dart';
 import '../../../core/router/app_routes.dart';
+import '../../../core/theme/brand_assets.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../widgets/mukking_card.dart';
+import '../../discovery/presentation/discovery_visuals.dart';
+import '../../discovery/domain/discovery_party_filter.dart';
+import '../../discovery/domain/restaurant.dart';
+import '../../discovery/providers/discovery_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../chat/providers/chat_provider.dart';
 import '../data/matching_repository.dart';
@@ -20,6 +24,7 @@ const partyChatButtonKey = Key('party-chat-button');
 const partyRequestManagementKey = Key('party-request-management');
 const partyRequestEmptyKey = Key('party-request-empty');
 const partyManageRequestsButtonKey = Key('party-manage-requests-button');
+const partyRestaurantButtonKey = Key('party-restaurant-button');
 
 Key approveJoinRequestKey(String requestId) =>
     ValueKey('approve-join-request-$requestId');
@@ -39,6 +44,36 @@ class PartyDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    return DiscoveryTheme(child: Builder(builder: (context) {
+      final theme = Theme.of(context);
+      return Theme(
+          data: theme.copyWith(
+              filledButtonTheme: FilledButtonThemeData(
+            style: FilledButton.styleFrom(
+                minimumSize: const Size(44, 52),
+                textStyle: theme.textTheme.labelLarge?.copyWith(fontSize: 15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16))),
+          )),
+          child: ColoredBox(
+              color: MukkingBrand.background,
+              child: Center(
+                  child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 840),
+                child: Builder(builder: (context) => _content(context, ref)),
+              ))));
+    }));
+  }
+
+  void _back(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go(returnPath ?? AppRoutes.home);
+    }
+  }
+
+  Widget _content(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
     final partyAsync = ref.watch(partyByIdProvider(partyId));
 
@@ -46,9 +81,12 @@ class PartyDetailScreen extends ConsumerWidget {
       data: (party) {
         if (party == null) {
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             children: [
-              MukkingCard(
+              Align(
+                  alignment: Alignment.centerLeft,
+                  child: BackButton(onPressed: () => _back(context))),
+              DiscoverySurface(
                 child: Column(
                   children: [
                     Text(
@@ -86,291 +124,181 @@ class PartyDetailScreen extends ConsumerWidget {
           localRequestStatus: requestStatus,
         );
         final isHost = viewerRole == PartyViewerRole.author;
-        final restaurantName = party.restaurantName.trim().isEmpty
-            ? party.title
-            : party.restaurantName.trim();
+        final restaurant = hasLinkedRestaurant(party)
+            ? ref.watch(restaurantByIdProvider(party.restaurantId))
+            : null;
 
         return ListView(
           key: partyDetailPageKey,
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
           children: [
-            Row(
-              children: [
-                BackButton(
-                  color: tokens.textPrimary,
-                  onPressed: () {
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go(returnPath ?? AppRoutes.home);
-                    }
-                  },
-                ),
-                Expanded(
-                  child: Text(
-                    '파티 상세',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                IconButton(
-                  onPressed: () {},
-                  icon: const Icon(Icons.more_horiz_rounded),
-                  tooltip: '신고/차단 메뉴',
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Container(
-              height: 260,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(32),
-                gradient: LinearGradient(
-                  colors: [
-                    tokens.secondary.withValues(alpha: 0.94),
-                    tokens.primary.withValues(alpha: 0.84),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Positioned(
-                    right: -26,
-                    bottom: -28,
-                    child: Icon(
-                      Icons.restaurant_rounded,
-                      color: tokens.surface.withValues(alpha: 0.16),
-                      size: 160,
-                    ),
-                  ),
-                  Positioned(
-                    left: 22,
-                    bottom: 22,
-                    right: 22,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          restaurantName,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                color: tokens.surface,
-                              ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          party.address.trim().isEmpty
-                              ? party.title
-                              : party.address,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(
-                                color: tokens.surface.withValues(alpha: 0.9),
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            Row(children: [
+              BackButton(
+                  color: tokens.textPrimary, onPressed: () => _back(context)),
+              const SizedBox(width: 4),
+              Expanded(
+                  child: Text('모임 상세',
+                      style: Theme.of(context).textTheme.titleMedium)),
+            ]),
+            const SizedBox(height: 12),
+            _RestaurantContext(party: party, restaurant: restaurant),
             const SizedBox(height: 18),
-            MukkingCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (isHost) ...[
-                    Chip(
-                      avatar: Icon(
-                        Icons.person_rounded,
-                        color: tokens.primary,
-                        size: 18,
-                      ),
-                      label: const Text('내가 만든 모임'),
-                      backgroundColor: tokens.accent.withValues(alpha: 0.45),
-                      side: BorderSide.none,
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                  _StatusPill(status: party.status),
-                  const SizedBox(height: 12),
-                  Text(
-                    party.title,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  if (party.address.trim().isNotEmpty) ...[
-                    Text(
-                      party.address,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              _StatusPill(status: party.status),
+              if (isHost)
+                const Chip(
+                    label: Text('내가 만든 모임'),
+                    backgroundColor: MukkingBrand.warm,
+                    side: BorderSide.none),
+            ]),
+            const SizedBox(height: 12),
+            Text(party.title,
+                style: Theme.of(context)
+                    .textTheme
+                    .headlineSmall
+                    ?.copyWith(fontSize: 24, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 12),
+            DiscoverySurface(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                   _DetailRow(
-                    icon: Icons.schedule_rounded,
-                    label: '날짜/시간',
-                    value: party.scheduledLabel,
-                  ),
+                      icon: Icons.schedule_rounded,
+                      label: '날짜/시간',
+                      value: party.scheduledLabel),
+                  _DetailRow(
+                      icon: Icons.people_alt_outlined,
+                      label: '모집 인원',
+                      value: party.memberLabel),
+                  _DetailRow(
+                      icon: Icons.event_seat_outlined,
+                      label: '남은 자리',
+                      value:
+                          '${(party.maxMembers - party.currentMembers).clamp(0, party.maxMembers)}자리'),
                   if (party.distanceKm > 0)
                     _DetailRow(
-                      icon: Icons.place_rounded,
-                      label: '거리',
-                      value: party.distanceLabel,
-                    ),
-                  _DetailRow(
-                    icon: Icons.people_alt_rounded,
-                    label: '모집 인원',
-                    value: party.memberLabel,
-                  ),
-                  _DetailRow(
-                    icon: Icons.person_rounded,
-                    label: '파티장',
-                    value: party.hostName,
-                  ),
-                  _DetailRow(
-                    icon: Icons.verified_user_outlined,
-                    label: '참여 상태',
-                    value: recoveredRequest?.isLoading == true &&
-                            joinState.valueOrNull == null
-                        ? '확인 중'
-                        : recoveredRequest?.hasError == true &&
+                        icon: Icons.near_me_outlined,
+                        label: '거리',
+                        value: party.distanceLabel),
+                ])),
+            if ((party.description.trim().isNotEmpty &&
+                    party.description.trim() != party.title.trim()) ||
+                (party.hostName.trim().isNotEmpty &&
+                    party.hostName.trim() != '파티장')) ...[
+              const SizedBox(height: 16),
+              DiscoverySurface(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                    if (party.description.trim().isNotEmpty &&
+                        party.description.trim() != party.title.trim()) ...[
+                      Text('모임 소개',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Text(party.description,
+                          style: Theme.of(context).textTheme.bodyMedium),
+                    ],
+                    // The API mapper's generic '파티장' is not a real nickname.
+                    if (party.hostName.trim().isNotEmpty &&
+                        party.hostName.trim() != '파티장') ...[
+                      const SizedBox(height: 14),
+                      _DetailRow(
+                          icon: Icons.person_outline_rounded,
+                          label: '방장',
+                          value: party.hostName),
+                    ],
+                  ])),
+            ],
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _viewerStatusSurface(viewerRole),
+                border: Border.all(color: MukkingBrand.border),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _DetailRow(
+                        icon: Icons.person_outline_rounded,
+                        label: '내 상태',
+                        value: recoveredRequest?.isLoading == true &&
                                 joinState.valueOrNull == null
-                            ? '확인 필요'
-                            : _viewerRoleLabel(viewerRole),
-                  ),
-                  _DetailRow(
-                    icon: Icons.event_seat_outlined,
-                    label: '남은 자리',
-                    value:
-                        '${(party.maxMembers - party.currentMembers).clamp(0, party.maxMembers)}자리',
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            MukkingCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('획득 가능한 보상',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _RewardPanel(
-                        icon: Icons.bolt_rounded,
-                        label: '+${party.rewardXp} XP',
-                        color: tokens.rewardXp,
-                      ),
-                      const SizedBox(width: 10),
-                      _RewardPanel(
-                        icon: Icons.toll_rounded,
-                        label: '+${party.rewardPoints}P',
-                        color: tokens.rewardPoint,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            MukkingCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('참여자', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final member in party.memberNames)
-                        Chip(
-                          avatar: Icon(
-                            Icons.face_rounded,
-                            color: tokens.primary,
-                            size: 18,
-                          ),
-                          label: Text(member),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  Text('태그', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final tag in party.tags)
-                        Chip(
-                          label: Text('#$tag'),
-                          backgroundColor:
-                              tokens.accent.withValues(alpha: 0.55),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            MukkingCard(
-              backgroundColor: tokens.background,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('파티 소개', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(party.description,
-                      style: Theme.of(context).textTheme.bodyLarge),
-                  const SizedBox(height: 14),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: tokens.surface,
-                      borderRadius: BorderRadius.circular(18),
+                            ? '확인 중'
+                            : recoveredRequest?.hasError == true &&
+                                    joinState.valueOrNull == null
+                                ? '확인 필요'
+                                : _viewerRoleLabel(viewerRole)),
+                    _PartyPrimaryAction(
+                      party: party,
+                      viewerRole: viewerRole,
+                      myRequestKey: myRequestKey,
+                      requestRecoveryLoading:
+                          recoveredRequest?.isLoading == true &&
+                              joinState.valueOrNull == null,
+                      requestRecoveryError:
+                          recoveredRequest?.hasError == true &&
+                              joinState.valueOrNull == null,
                     ),
-                    child: Text(
-                      '신고/차단 메뉴 placeholder · 실제 기능은 다음 단계에서 연결',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: tokens.danger,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                  ),
-                ],
+                  ]),
+            ),
+            if (party.memberNames.isNotEmpty ||
+                party.rewardXp > 0 ||
+                party.rewardPoints > 0) ...[
+              const SizedBox(height: 16),
+              DiscoverySurface(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (party.memberNames.isNotEmpty)
+                      _DetailRow(
+                          icon: Icons.group_outlined,
+                          label: '참여자',
+                          value: party.memberNames.join(' · ')),
+                    if (party.rewardXp > 0 || party.rewardPoints > 0)
+                      _DetailRow(
+                        icon: Icons.stars_outlined,
+                        label: '참여 보상',
+                        value: [
+                          if (party.rewardXp > 0) '+${party.rewardXp} XP',
+                          if (party.rewardPoints > 0) '+${party.rewardPoints}P',
+                        ].join(' · '),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 18),
-            if (isHost) _JoinRequestManagementCard(party: party),
-            if (isHost) const SizedBox(height: 12),
-            _PartyPrimaryAction(
-              party: party,
-              viewerRole: viewerRole,
-              myRequestKey: myRequestKey,
-              requestRecoveryLoading: recoveredRequest?.isLoading == true &&
-                  joinState.valueOrNull == null,
-              requestRecoveryError: recoveredRequest?.hasError == true &&
-                  joinState.valueOrNull == null,
-            ),
+            ],
+            if (isHost) ...[
+              const SizedBox(height: 18),
+              _JoinRequestManagementCard(party: party),
+            ],
           ],
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => ListView(padding: const EdgeInsets.all(18), children: [
+        Align(
+            alignment: Alignment.centerLeft,
+            child: BackButton(onPressed: () => _back(context))),
+        const DiscoverySurface(
+            child: Row(children: [
+          SizedBox.square(
+              dimension: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 12),
+          Expanded(child: Text('모임 정보를 불러오고 있어요.')),
+        ])),
+      ]),
       error: (error, _) {
         final message =
             error is ApiError ? error.userMessage : '파티 상세 정보를 불러오지 못했어요.';
 
         return ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           children: [
-            MukkingCard(
+            Align(
+                alignment: Alignment.centerLeft,
+                child: BackButton(onPressed: () => _back(context))),
+            DiscoverySurface(
               child: Column(
                 children: [
                   Text(
@@ -389,6 +317,75 @@ class PartyDetailScreen extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _RestaurantContext extends StatelessWidget {
+  const _RestaurantContext({required this.party, required this.restaurant});
+
+  final MatchingParty party;
+  final Restaurant? restaurant;
+
+  @override
+  Widget build(BuildContext context) {
+    final restaurantName = party.restaurantName.trim().isNotEmpty
+        ? party.restaurantName.trim()
+        : restaurant?.name;
+    final address = party.address.trim().isNotEmpty
+        ? party.address.trim()
+        : restaurant?.displayAddress ?? '';
+
+    return DiscoverySurface(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (restaurant != null)
+          DiscoveryRestaurantImage(restaurant: restaurant!, size: 60)
+        else
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: MukkingBrand.mint,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.restaurant_menu_rounded,
+                color: MukkingBrand.green),
+          ),
+        const SizedBox(width: 12),
+        Expanded(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+                restaurantName?.isNotEmpty == true
+                    ? restaurantName!
+                    : '연결된 식당 정보가 없어요.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: MukkingBrand.text, fontWeight: FontWeight.w800)),
+            if (restaurant?.category.isNotEmpty == true) ...[
+              const SizedBox(height: 4),
+              Text(restaurant!.category,
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
+            if (address.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(address,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall),
+            ],
+            if (hasLinkedRestaurant(party))
+              TextButton.icon(
+                key: partyRestaurantButtonKey,
+                onPressed: () => context
+                    .push(AppRoutes.restaurantDetailPath(party.restaurantId)),
+                icon: const Icon(Icons.place_outlined, size: 18),
+                label: const Text('식당 보기'),
+              ),
+          ]),
+        ),
+      ]),
     );
   }
 }
@@ -417,6 +414,13 @@ class _PartyPrimaryAction extends ConsumerWidget {
         children: [
           OutlinedButton.icon(
             key: partyManageRequestsButtonKey,
+            style: room.valueOrNull == null
+                ? OutlinedButton.styleFrom(
+                    backgroundColor: MukkingBrand.orange,
+                    foregroundColor: MukkingBrand.surface,
+                    minimumSize: const Size(44, 52),
+                  )
+                : null,
             onPressed: () =>
                 ref.invalidate(partyJoinRequestsProvider(party.id)),
             icon: const Icon(Icons.manage_accounts_rounded),
@@ -479,6 +483,10 @@ class _PartyPrimaryAction extends ConsumerWidget {
     if (viewerRole == PartyViewerRole.pending) {
       return FilledButton.icon(
         key: partyPendingButtonKey,
+        style: FilledButton.styleFrom(
+          disabledBackgroundColor: MukkingBrand.warm,
+          disabledForegroundColor: MukkingBrand.text,
+        ),
         onPressed: null,
         icon: const Icon(Icons.hourglass_top_rounded),
         label: const Text('참여 신청 중'),
@@ -487,6 +495,10 @@ class _PartyPrimaryAction extends ConsumerWidget {
 
     if (viewerRole == PartyViewerRole.unavailable) {
       return FilledButton.icon(
+        style: FilledButton.styleFrom(
+          disabledBackgroundColor: MukkingBrand.border,
+          disabledForegroundColor: MukkingBrand.secondary,
+        ),
         onPressed: null,
         icon: const Icon(Icons.event_busy_rounded),
         label: const Text('모집이 마감됐어요'),
@@ -557,14 +569,15 @@ class _JoinRequestManagementCard extends ConsumerWidget {
     final requests = ref.watch(partyJoinRequestsProvider(party.id));
     final tokens = context.tokens;
 
-    return MukkingCard(
+    return DiscoverySurface(
       key: partyRequestManagementKey,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.manage_accounts_rounded, color: tokens.primary),
+              const Icon(Icons.manage_accounts_rounded,
+                  color: MukkingBrand.orange),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -651,8 +664,9 @@ class _JoinRequestTile extends ConsumerWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: tokens.background,
-        borderRadius: BorderRadius.circular(18),
+        color: MukkingBrand.surface,
+        border: Border.all(color: MukkingBrand.border),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -664,7 +678,15 @@ class _JoinRequestTile extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(
             request.status.label,
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: switch (request.status) {
+                    MatchingJoinRequestStatus.pending => MukkingBrand.orange,
+                    MatchingJoinRequestStatus.accepted => MukkingBrand.green,
+                    MatchingJoinRequestStatus.rejected => tokens.danger,
+                    MatchingJoinRequestStatus.cancelled =>
+                      MukkingBrand.secondary,
+                  },
+                ),
           ),
           if (request.isPending) ...[
             const SizedBox(height: 10),
@@ -673,6 +695,9 @@ class _JoinRequestTile extends ConsumerWidget {
                 Expanded(
                   child: OutlinedButton(
                     key: rejectJoinRequestKey(request.id),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: tokens.danger,
+                    ),
                     onPressed: action.isLoading
                         ? null
                         : () => _respond(context, ref, key, 'rejected'),
@@ -735,10 +760,10 @@ class _StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = context.tokens;
     final color = switch (status) {
-      MatchingPartyStatus.hot => tokens.partyHot,
-      MatchingPartyStatus.urgent => tokens.partyUrgent,
+      MatchingPartyStatus.hot => MukkingBrand.green,
+      MatchingPartyStatus.urgent => MukkingBrand.orange,
       MatchingPartyStatus.full => tokens.textSecondary,
-      MatchingPartyStatus.open => tokens.success,
+      MatchingPartyStatus.open => MukkingBrand.green,
     };
 
     return Align(
@@ -758,37 +783,15 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
-class _RewardPanel extends StatelessWidget {
-  const _RewardPanel({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color),
-            const SizedBox(width: 8),
-            Text(label, style: Theme.of(context).textTheme.labelLarge),
-          ],
-        ),
-      ),
-    );
-  }
-}
+Color _viewerStatusSurface(PartyViewerRole role) => switch (role) {
+      PartyViewerRole.pending => MukkingBrand.warm,
+      PartyViewerRole.approved => MukkingBrand.mint,
+      PartyViewerRole.author => MukkingBrand.mint,
+      PartyViewerRole.unavailable => MukkingBrand.background,
+      PartyViewerRole.rejected => MukkingBrand.background,
+      PartyViewerRole.cancelled => MukkingBrand.background,
+      PartyViewerRole.available => MukkingBrand.surface,
+    };
 
 class _DetailRow extends StatelessWidget {
   const _DetailRow({
@@ -808,18 +811,19 @@ class _DetailRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(icon, color: tokens.primary, size: 20),
           const SizedBox(width: 10),
           SizedBox(
-            width: 82,
+            width: 74,
             child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
           ),
           Expanded(
             child: Text(
               value,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
             ),
           ),

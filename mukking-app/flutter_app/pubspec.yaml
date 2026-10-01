@@ -28,4 +28,11 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/pets/
+    - assets/branding/mukking_logo.png
+    - assets/mascot/mukking_default.png
+    - assets/mascot/mukking_heart.png
+    - assets/mascot/mukking_speech.png
+    - assets/mascot/mukking_food.png
+    - assets/mascot/mukking_cheer.png
+    - assets/pets/dog/
+    - assets/pets/cat/

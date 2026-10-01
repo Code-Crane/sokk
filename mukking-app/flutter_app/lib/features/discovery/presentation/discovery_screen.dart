@@ -4,12 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/map/kakao_map_initializer.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/network/api_error.dart';
 import '../../../core/router/app_routes.dart';
+import '../../../core/theme/brand_assets.dart';
 import '../../../core/theme/theme_tokens.dart';
-import '../../../widgets/mukking_card.dart';
 import '../../matching/providers/matching_provider.dart';
+import '../../notifications/providers/notification_provider.dart';
 import '../domain/discovery_filter.dart';
 import '../domain/discovery_party_filter.dart';
 import '../domain/restaurant.dart';
@@ -20,6 +20,7 @@ import 'map/restaurant_map_view.dart';
 import 'discovery_party_filter_sheet.dart';
 import 'restaurant_bottom_sheet.dart';
 import 'search_this_area_button.dart';
+import 'discovery_visuals.dart';
 
 const fullscreenMapButtonKey = Key('open-fullscreen-map-button');
 const nearbyRestaurantListKey = Key('nearby-restaurant-list');
@@ -40,6 +41,12 @@ class DiscoveryScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    return DiscoveryTheme(
+      child: Builder(builder: (context) => _buildContent(context, ref)),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, WidgetRef ref) {
     final tokens = context.tokens;
     final categories = ref.watch(discoveryCategoriesProvider);
     final filter = ref.watch(discoveryFilterProvider);
@@ -53,169 +60,158 @@ class DiscoveryScreen extends ConsumerWidget {
         restaurantQuery.lng != null &&
         restaurantQuery.radiusKm != null;
     final locationState = ref.watch(discoveryLocationProvider);
+    final unread = ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
+    final visibleRestaurantIds = restaurants.map((item) => item.id).toSet();
+    final visiblePartyCount = ref
+        .watch(visiblePartyPostsProvider)
+        .where((party) =>
+            visibleRestaurantIds.contains(party.restaurantId) &&
+            isRecruitingParty(party) &&
+            hasAvailablePartySeat(party))
+        .length;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('발견', style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 4),
-                  Text(
-                    AppConstants.defaultRegion,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-            FilledButton.tonalIcon(
-              onPressed: locationState.isLoading
-                  ? null
-                  : () => ref
-                      .read(discoveryLocationProvider.notifier)
-                      .loadNearbyRestaurants(),
-              icon: const Icon(Icons.my_location_rounded),
-              label: Text(locationState.isLoading ? '위치 확인 중' : '내 주변 식당'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _DiscoverySearchField(
-          key: discoverySearchFieldKey,
-          query: filter.query,
-          iconColor: tokens.primary,
-          onChanged: ref.read(discoveryFilterProvider.notifier).updateQuery,
-        ),
-        const SizedBox(height: 10),
-        _DiscoveryQuickFilters(
-          filter: filter,
-          onToggleFavorites:
-              ref.read(discoveryFilterProvider.notifier).toggleFavoritesOnly,
-          onToggleActiveParty:
-              ref.read(discoveryFilterProvider.notifier).toggleActivePartyOnly,
-          onClear: ref.read(discoveryFilterProvider.notifier).clearCriteria,
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: OutlinedButton.icon(
-            key: discoveryPartyFilterButtonKey,
-            onPressed: () => _openPartyFilters(context, ref, partyFilter),
-            icon: const Icon(Icons.event_available_outlined, size: 19),
-            label: Text(
-              partyFilter.activeCount == 0
-                  ? '모임 조건'
-                  : '모임 조건 ${partyFilter.activeCount}',
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final category in categories) ...[
-                ChoiceChip(
-                  key: ValueKey('discovery-category-$category'),
-                  selected: filter.selectedCategory == category,
-                  label: Text(category),
-                  onSelected: (_) => ref
-                      .read(discoveryFilterProvider.notifier)
-                      .selectCategory(category),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        if (locationState.status != DiscoveryLocationStatus.initial) ...[
-          _LocationStatusCard(state: locationState),
-          const SizedBox(height: 12),
-        ],
-        restaurantFeed.when(
-          data: (_) {
-            final message = _resultStatusMessage(
-              rawCount: rawRestaurants.length,
-              filteredCount: restaurants.length,
-              filter: filter,
-              hasPartyFilter: partyFilter.isActive,
-              isNearbyMode: isNearbyMode,
-            );
-            return _RestaurantFeedStatus(
-              key: discoveryResultCountKey,
-              message: message,
-              icon: Icons.restaurant_rounded,
-            );
-          },
-          loading: () => const _RestaurantFeedStatus(
-            message: '식당 목록을 불러오는 중이에요.',
-            icon: Icons.sync_rounded,
-            showProgress: true,
-          ),
-          error: (error, _) => _RestaurantFeedStatus(
-            message:
-                error is ApiError ? error.userMessage : '맛집 목록을 불러오지 못했어요.',
-            icon: Icons.error_outline_rounded,
-            onRetry: () => ref.invalidate(restaurantFeedProvider),
-          ),
-        ),
-        const SizedBox(height: 12),
-        const _DiscoveryMapSection(),
-        const SizedBox(height: 12),
-        const _MapLegendRow(),
-        const SizedBox(height: 16),
-        if (restaurants.isNotEmpty) ...[
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  isNearbyMode ? '내 주변 식당' : '식당 목록',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              const SizedBox(width: 12),
-              _DiscoverySortMenu(
-                selectedSort: filter.selectedSort,
-                onSelected:
-                    ref.read(discoveryFilterProvider.notifier).selectSort,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          _RestaurantList(
-            key: nearbyRestaurantListKey,
-            restaurants: restaurants,
-            selectedRestaurantId: selectedRestaurant?.id,
-            onSelect: (restaurantId) => _selectRestaurant(
-              context,
-              ref,
-              restaurantId,
-              focusCamera: true,
-            ),
-          ),
-          const SizedBox(height: 16),
-        ],
-        if (selectedRestaurant != null)
-          RestaurantBottomSheet(restaurant: selectedRestaurant)
-        else if (restaurants.isEmpty)
-          MukkingCard(
-            child: Text(
-              _emptyStateMessage(
-                rawRestaurants: rawRestaurants,
-                filter: filter,
-                partyFilter: partyFilter,
-                isNearbyMode: isNearbyMode,
-              ),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-      ],
-    );
+    return ColoredBox(
+        color: tokens.background,
+        child: Center(
+            child: ConstrainedBox(
+                constraints:
+                    const BoxConstraints(maxWidth: MukkingBrand.contentWidth),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                  children: [
+                    _DiscoveryHeader(
+                      unreadCount: unread,
+                      nearbyMode: isNearbyMode,
+                    ),
+                    const SizedBox(height: 14),
+                    _DiscoverySearchRow(
+                      searchField: _DiscoverySearchField(
+                        key: discoverySearchFieldKey,
+                        query: filter.query,
+                        iconColor: tokens.primary,
+                        onChanged: ref
+                            .read(discoveryFilterProvider.notifier)
+                            .updateQuery,
+                      ),
+                      partyFilter: partyFilter,
+                      onPartyFilters: () =>
+                          _openPartyFilters(context, ref, partyFilter),
+                    ),
+                    const SizedBox(height: 10),
+                    _DiscoveryQuickFilters(
+                      filter: filter,
+                      onToggleFavorites: ref
+                          .read(discoveryFilterProvider.notifier)
+                          .toggleFavoritesOnly,
+                      onToggleActiveParty: ref
+                          .read(discoveryFilterProvider.notifier)
+                          .toggleActivePartyOnly,
+                      onClear: ref
+                          .read(discoveryFilterProvider.notifier)
+                          .clearCriteria,
+                    ),
+                    const SizedBox(height: 4),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final category in categories) ...[
+                            ChoiceChip(
+                              key: ValueKey('discovery-category-$category'),
+                              selected: filter.selectedCategory == category,
+                              label: Text(
+                                category,
+                                style: TextStyle(
+                                  color: filter.selectedCategory == category
+                                      ? Colors.white
+                                      : MukkingBrand.text,
+                                ),
+                              ),
+                              onSelected: (_) => ref
+                                  .read(discoveryFilterProvider.notifier)
+                                  .selectCategory(category),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (locationState.status !=
+                        DiscoveryLocationStatus.initial) ...[
+                      _LocationStatusCard(state: locationState),
+                      const SizedBox(height: 12),
+                    ],
+                    restaurantFeed.when(
+                      data: (_) {
+                        final message = _resultStatusMessage(
+                          rawCount: rawRestaurants.length,
+                          filteredCount: restaurants.length,
+                          filter: filter,
+                          hasPartyFilter: partyFilter.isActive,
+                          isNearbyMode: isNearbyMode,
+                        );
+                        return _RestaurantFeedStatus(
+                          key: discoveryResultCountKey,
+                          message: message,
+                          icon: Icons.restaurant_rounded,
+                        );
+                      },
+                      loading: () => const _RestaurantFeedStatus(
+                        message: '식당 목록을 불러오는 중이에요.',
+                        icon: Icons.sync_rounded,
+                        showProgress: true,
+                      ),
+                      error: (error, _) => _RestaurantFeedStatus(
+                        message: error is ApiError
+                            ? error.userMessage
+                            : '맛집 목록을 불러오지 못했어요.',
+                        icon: Icons.error_outline_rounded,
+                        onRetry: () => ref.invalidate(restaurantFeedProvider),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const _DiscoveryMapSection(),
+                    const SizedBox(height: 12),
+                    const _MapLegendRow(),
+                    const SizedBox(height: 16),
+                    if (restaurants.isNotEmpty) ...[
+                      _DiscoveryResultsHeader(
+                        partyCount: visiblePartyCount,
+                        selectedSort: filter.selectedSort,
+                        onSelected: ref
+                            .read(discoveryFilterProvider.notifier)
+                            .selectSort,
+                      ),
+                      const SizedBox(height: 10),
+                      _RestaurantList(
+                        key: nearbyRestaurantListKey,
+                        restaurants: restaurants,
+                        selectedRestaurantId: selectedRestaurant?.id,
+                        onSelect: (restaurantId) => _selectRestaurant(
+                          context,
+                          ref,
+                          restaurantId,
+                          focusCamera: true,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (selectedRestaurant != null)
+                      RestaurantBottomSheet(restaurant: selectedRestaurant)
+                    else if (restaurants.isEmpty &&
+                        !restaurantFeed.isLoading &&
+                        !restaurantFeed.hasError)
+                      _DiscoveryEmptyState(
+                        message: _emptyStateMessage(
+                          rawRestaurants: rawRestaurants,
+                          filter: filter,
+                          partyFilter: partyFilter,
+                          isNearbyMode: isNearbyMode,
+                        ),
+                      ),
+                  ],
+                ))));
   }
 }
 
@@ -230,6 +226,116 @@ Future<void> _openPartyFilters(
   );
   if (next == null || !context.mounted) return;
   ref.read(discoveryPartyFilterProvider.notifier).apply(next);
+}
+
+class _DiscoveryHeader extends StatelessWidget {
+  const _DiscoveryHeader({
+    required this.unreadCount,
+    required this.nearbyMode,
+  });
+
+  final int unreadCount;
+  final bool nearbyMode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 88,
+          child: Row(
+            children: [
+              const Icon(Icons.location_on_outlined,
+                  size: 17, color: MukkingBrand.green),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  nearbyMode ? '현재 위치' : '지역 탐색',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: MukkingBrand.secondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Image.asset(
+            BrandAssets.logo,
+            height: 70,
+            fit: BoxFit.contain,
+            semanticLabel: '먹킹',
+          ),
+        ),
+        SizedBox(
+          width: 88,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              backgroundColor: MukkingBrand.orange,
+              child: IconButton(
+                tooltip: '알림 목록',
+                onPressed: () => context.push(AppRoutes.notifications),
+                icon: const Icon(Icons.notifications_none_rounded),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DiscoverySearchRow extends StatelessWidget {
+  const _DiscoverySearchRow({
+    required this.searchField,
+    required this.partyFilter,
+    required this.onPartyFilters,
+  });
+
+  final Widget searchField;
+  final DiscoveryPartyFilterState partyFilter;
+  final VoidCallback onPartyFilters;
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.textScalerOf(context).scale(14) > 19;
+    final filterButton = OutlinedButton.icon(
+      key: discoveryPartyFilterButtonKey,
+      onPressed: onPartyFilters,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: MukkingBrand.green,
+        backgroundColor:
+            partyFilter.isActive ? MukkingBrand.mint : MukkingBrand.surface,
+        padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 14),
+      ),
+      icon: Badge(
+        isLabelVisible: compact && partyFilter.activeCount > 0,
+        label: Text('${partyFilter.activeCount}'),
+        backgroundColor: MukkingBrand.orange,
+        child: const Icon(Icons.tune_rounded, size: 19),
+      ),
+      label: compact
+          ? const SizedBox.shrink()
+          : Text(partyFilter.activeCount == 0
+              ? '모임 조건'
+              : '모임 조건 ${partyFilter.activeCount}'),
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: searchField),
+        const SizedBox(width: 8),
+        filterButton,
+      ],
+    );
+  }
 }
 
 class _DiscoveryQuickFilters extends StatelessWidget {
@@ -254,16 +360,35 @@ class _DiscoveryQuickFilters extends StatelessWidget {
           FilterChip(
             key: favoritesOnlyFilterKey,
             selected: filter.favoritesOnly,
-            avatar: const Icon(Icons.favorite_outline_rounded, size: 18),
-            label: const Text('찜한 식당'),
+            avatar: Icon(
+              Icons.favorite_outline_rounded,
+              size: 18,
+              color: filter.favoritesOnly ? Colors.white : MukkingBrand.green,
+            ),
+            label: Text(
+              '찜한 식당',
+              style: TextStyle(
+                color: filter.favoritesOnly ? Colors.white : MukkingBrand.text,
+              ),
+            ),
             onSelected: (_) => onToggleFavorites(),
           ),
           const SizedBox(width: 8),
           FilterChip(
             key: activePartyOnlyFilterKey,
             selected: filter.activePartyOnly,
-            avatar: const Icon(Icons.groups_2_outlined, size: 18),
-            label: const Text('모집 중'),
+            avatar: Icon(
+              Icons.groups_2_outlined,
+              size: 18,
+              color: filter.activePartyOnly ? Colors.white : MukkingBrand.green,
+            ),
+            label: Text(
+              '모집 중',
+              style: TextStyle(
+                color:
+                    filter.activePartyOnly ? Colors.white : MukkingBrand.text,
+              ),
+            ),
             onSelected: (_) => onToggleActiveParty(),
           ),
           if (filter.isActive) ...[
@@ -275,6 +400,86 @@ class _DiscoveryQuickFilters extends StatelessWidget {
               label: const Text('초기화'),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DiscoveryResultsHeader extends StatelessWidget {
+  const _DiscoveryResultsHeader({
+    required this.partyCount,
+    required this.selectedSort,
+    required this.onSelected,
+  });
+
+  final int partyCount;
+  final RestaurantSortOption selectedSort;
+  final ValueChanged<RestaurantSortOption> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 8, 10, 8),
+      decoration: const BoxDecoration(
+        color: MukkingBrand.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        border: Border.fromBorderSide(BorderSide(color: MukkingBrand.border)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: MukkingBrand.border,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '지도에서 찾은 동행 $partyCount개',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _DiscoverySortMenu(
+                selectedSort: selectedSort,
+                onSelected: onSelected,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DiscoveryEmptyState extends StatelessWidget {
+  const _DiscoveryEmptyState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return DiscoverySurface(
+      child: Row(
+        children: [
+          const MukkingMascot(size: 52),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
         ],
       ),
     );
@@ -401,7 +606,7 @@ class _DiscoverySearchFieldState extends State<_DiscoverySearchField> {
       onChanged: widget.onChanged,
       decoration: InputDecoration(
         prefixIcon: Icon(Icons.search_rounded, color: widget.iconColor),
-        hintText: '맛집, 음식, 지역 검색',
+        hintText: '식당 이름이나 메뉴를 검색해보세요',
       ),
     );
   }
@@ -471,6 +676,7 @@ class _DiscoveryMapSection extends ConsumerWidget {
     final location = ref.watch(
       discoveryLocationProvider.select((state) => state.location),
     );
+    final locationState = ref.watch(discoveryLocationProvider);
     final urgentRestaurantIds = parties
         .where((party) => party.isUrgent)
         .map((party) => party.restaurantId)
@@ -511,13 +717,41 @@ class _DiscoveryMapSection extends ConsumerWidget {
           top: 12,
           right: 12,
           child: Material(
-            elevation: 3,
+            elevation: 1,
             borderRadius: BorderRadius.circular(16),
             child: IconButton.filledTonal(
               key: fullscreenMapButtonKey,
               tooltip: '전체 화면 지도',
               onPressed: () => context.push(AppRoutes.discoveryMap),
               icon: const Icon(Icons.fullscreen_rounded),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 12,
+          bottom: 12,
+          child: Material(
+            color: MukkingBrand.surface,
+            elevation: 1,
+            borderRadius: BorderRadius.circular(14),
+            child: FilledButton.tonalIcon(
+              onPressed: locationState.isLoading
+                  ? null
+                  : ref
+                      .read(discoveryLocationProvider.notifier)
+                      .loadNearbyRestaurants,
+              style: FilledButton.styleFrom(
+                foregroundColor: MukkingBrand.green,
+                backgroundColor: MukkingBrand.surface,
+                side: const BorderSide(color: MukkingBrand.border),
+              ),
+              icon: locationState.isLoading
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.my_location_rounded, size: 18),
+              label: Text(locationState.isLoading ? '위치 확인 중' : '내 위치'),
             ),
           ),
         ),
@@ -635,7 +869,7 @@ class _LocationStatusCard extends ConsumerWidget {
         ),
     };
 
-    return MukkingCard(
+    return DiscoverySurface(
       child: Row(
         children: [
           Icon(icon, color: tokens.primary),
@@ -671,113 +905,110 @@ class _LocationStatusCard extends ConsumerWidget {
 }
 
 class _RestaurantList extends StatelessWidget {
-  const _RestaurantList({
-    required this.restaurants,
-    required this.selectedRestaurantId,
-    required this.onSelect,
-    super.key,
-  });
-
+  const _RestaurantList(
+      {required this.restaurants,
+      required this.selectedRestaurantId,
+      required this.onSelect,
+      super.key});
   final List<Restaurant> restaurants;
   final String? selectedRestaurantId;
   final ValueChanged<String> onSelect;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.tokens;
-    return SizedBox(
-      height: 148,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: restaurants.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final restaurant = restaurants[index];
-          final selected = restaurant.id == selectedRestaurantId;
-          return InkWell(
-            key: ValueKey('nearby-restaurant-card-${restaurant.id}'),
-            onTap: () => onSelect(restaurant.id),
-            borderRadius: BorderRadius.circular(20),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 250,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: selected
-                    ? tokens.primary.withValues(alpha: 0.1)
-                    : tokens.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: selected
-                      ? tokens.primary
-                      : tokens.textSecondary.withValues(alpha: 0.22),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    restaurant.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
+    final text = Theme.of(context).textTheme;
+    final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.3;
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: restaurants.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final restaurant = restaurants[index];
+        return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey('nearby-restaurant-card-${restaurant.id}'),
+              onTap: () => onSelect(restaurant.id),
+              borderRadius: BorderRadius.circular(18),
+              child: DiscoverySurface(
+                selected: restaurant.id == selectedRestaurantId,
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      DiscoveryRestaurantImage(
+                          restaurant: restaurant, size: largeText ? 60 : 86),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          [
-                            if (restaurant.category.isNotEmpty)
-                              restaurant.category,
-                            restaurant.distanceLabel,
-                          ].join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        restaurant.isFavorite
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                        size: 18,
-                        color: restaurant.isFavorite
-                            ? tokens.favorite
-                            : tokens.textSecondary,
-                      ),
-                    ],
-                  ),
-                  if (restaurant.address.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      restaurant.address,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                  const Spacer(),
-                  Row(
-                    children: [
-                      Icon(Icons.groups_rounded,
-                          size: 17, color: tokens.partyHot),
-                      const SizedBox(width: 5),
-                      Text(
-                        '모집 중 ${restaurant.activePartyCount}개',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: tokens.partyHot,
-                            ),
-                      ),
-                    ],
-                  ),
-                ],
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                            Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                      child: Text(restaurant.name,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: text.titleSmall?.copyWith(
+                                              fontWeight: FontWeight.w800))),
+                                  const SizedBox(width: 4),
+                                  Semantics(
+                                      label: restaurant.isFavorite
+                                          ? '찜한 식당'
+                                          : '찜하지 않은 식당',
+                                      child: Icon(
+                                          restaurant.isFavorite
+                                              ? Icons.favorite_rounded
+                                              : Icons.favorite_border_rounded,
+                                          size: 19,
+                                          color: restaurant.isFavorite
+                                              ? MukkingBrand.orange
+                                              : MukkingBrand.secondary)),
+                                ]),
+                            const SizedBox(height: 5),
+                            Text(
+                                [
+                                  if (restaurant.category.isNotEmpty)
+                                    restaurant.category,
+                                  if (restaurant.distanceMeters != null)
+                                    restaurant.distanceLabel,
+                                ].join(' · '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.bodySmall),
+                            if (restaurant.displayAddress.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(restaurant.displayAddress,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: text.bodySmall),
+                            ],
+                            const SizedBox(height: 7),
+                            Text('모집 중 ${restaurant.activePartyCount}개',
+                                style: text.labelLarge
+                                    ?.copyWith(color: MukkingBrand.green)),
+                            const SizedBox(height: 5),
+                            DiscoveryPartyPreview(restaurantId: restaurant.id),
+                            const SizedBox(height: 9),
+                            Align(
+                                alignment: Alignment.centerRight,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 9),
+                                  decoration: BoxDecoration(
+                                      color: MukkingBrand.green,
+                                      borderRadius: BorderRadius.circular(10)),
+                                  child: Text('보러가기',
+                                      style: text.labelLarge?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800)),
+                                )),
+                          ])),
+                    ]),
               ),
-            ),
-          );
-        },
-      ),
+            ));
+      },
     );
   }
 }

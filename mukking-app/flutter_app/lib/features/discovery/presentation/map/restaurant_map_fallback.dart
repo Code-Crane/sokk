@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/theme_tokens.dart';
-import '../../../../widgets/mukking_card.dart';
+import '../../../../core/theme/brand_assets.dart';
+import '../discovery_visuals.dart';
 import '../../domain/restaurant.dart';
 import '../../domain/restaurant_map_marker.dart';
 
@@ -27,40 +28,34 @@ class RestaurantMapFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = context.tokens;
     final restaurantById = {for (final item in restaurants) item.id: item};
 
     final map = ClipRRect(
-      borderRadius: expanded ? BorderRadius.zero : BorderRadius.circular(28),
+      borderRadius: expanded ? BorderRadius.zero : BorderRadius.circular(18),
       child: LayoutBuilder(
         builder: (context, constraints) {
           return Stack(
             children: [
-              Positioned.fill(
+              const Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        tokens.mapMarker.withValues(alpha: 0.18),
-                        tokens.background,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                    color: MukkingBrand.mint,
                   ),
                 ),
               ),
               Positioned(
                 left: 18,
+                right: 70,
                 top: 18,
                 child: _MapFloatingLabel(title: title, subtitle: subtitle),
               ),
               Positioned(
                 right: 18,
+                left: 70,
                 bottom: 18,
                 child: const _MapFloatingLabel(
-                  title: 'Fallback markers',
-                  subtitle: '찜/파티 상태를 동일하게 반영해요.',
+                  title: '식당을 눌러 살펴보세요',
+                  subtitle: '찜과 모집 상태를 확인할 수 있어요.',
                 ),
               ),
               for (final marker in markers)
@@ -83,7 +78,7 @@ class RestaurantMapFallback extends StatelessWidget {
     if (expanded) {
       return SizedBox.expand(child: map);
     }
-    return MukkingCard(
+    return DiscoverySurface(
       padding: EdgeInsets.zero,
       child: SizedBox(height: 348, child: map),
     );
@@ -134,12 +129,13 @@ class _RestaurantMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = context.tokens;
-    final markerColor = switch (status) {
+    final statusColor = switch (status) {
       RestaurantMapMarkerStatus.urgentParty => tokens.partyUrgent,
       RestaurantMapMarkerStatus.activeParty => tokens.partyHot,
       RestaurantMapMarkerStatus.favorite => tokens.favorite,
       RestaurantMapMarkerStatus.normal => tokens.mapMarker,
     };
+    final markerColor = isSelected ? MukkingBrand.orange : statusColor;
 
     return GestureDetector(
       key: ValueKey('restaurant-map-marker-${restaurant.id}'),
@@ -150,7 +146,7 @@ class _RestaurantMarker extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
         decoration: BoxDecoration(
-          color: isSelected ? markerColor : tokens.surface,
+          color: isSelected ? MukkingBrand.orange : tokens.surface,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: markerColor.withValues(alpha: 0.48)),
           boxShadow: [

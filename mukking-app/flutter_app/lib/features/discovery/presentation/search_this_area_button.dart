@@ -16,7 +16,7 @@ class SearchThisAreaButton extends ConsumerWidget {
     }
 
     return Material(
-      elevation: 3,
+      elevation: 1,
       borderRadius: BorderRadius.circular(999),
       child: FilledButton.tonalIcon(
         key: buttonKey,
@@ -51,7 +51,8 @@ class SearchThisAreaButton extends ConsumerWidget {
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
             : const Icon(Icons.refresh_rounded),
-        label: Text(state.isLoading ? '검색 중' : '이 지역에서 다시 검색'),
+        label: Text(state.isLoading ? '검색 중' : '이 지역에서 다시 검색',
+            textAlign: TextAlign.center),
       ),
     );
   }

@@ -14,6 +14,7 @@ import 'map/restaurant_map_view.dart';
 import 'map/kakao_marker_adapter.dart';
 import 'restaurant_bottom_sheet.dart';
 import 'search_this_area_button.dart';
+import 'discovery_visuals.dart';
 
 const fullscreenMapScreenKey = Key('fullscreen-map-screen');
 const closeFullscreenMapButtonKey = Key('close-fullscreen-map-button');
@@ -34,6 +35,10 @@ class _FullscreenMapScreenState extends ConsumerState<FullscreenMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return DiscoveryTheme(child: Builder(builder: _buildContent));
+  }
+
+  Widget _buildContent(BuildContext context) {
     final tokens = context.tokens;
     final restaurants = ref.watch(filteredRestaurantsProvider);
     final selectedRestaurant = ref.watch(selectedRestaurantProvider);
@@ -154,7 +159,7 @@ class _MapControlButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      elevation: 3,
+      elevation: 1,
       borderRadius: BorderRadius.circular(16),
       child: IconButton.filledTonal(
         tooltip: tooltip,

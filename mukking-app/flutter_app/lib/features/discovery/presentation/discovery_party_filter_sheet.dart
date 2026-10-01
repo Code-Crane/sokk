@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../domain/discovery_party_filter.dart';
+import '../../../core/theme/brand_assets.dart';
+import 'discovery_visuals.dart';
 
 const discoveryPartyFilterSheetKey = Key('discovery-party-filter-sheet');
 const applyPartyFiltersKey = Key('apply-party-filters');
@@ -22,7 +24,11 @@ Future<DiscoveryPartyFilterState?> showDiscoveryPartyFilterSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => _DiscoveryPartyFilterSheet(initialFilter: initialFilter),
+    showDragHandle: true,
+    backgroundColor: MukkingBrand.surface,
+    builder: (_) => DiscoveryTheme(
+      child: _DiscoveryPartyFilterSheet(initialFilter: initialFilter),
+    ),
   );
 }
 
