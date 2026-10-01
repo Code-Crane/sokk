@@ -12,6 +12,7 @@ import {
   MIN_MATCHING_MANNER_SCORE
 } from "../../../shared/utils/rating";
 import { repositories } from "../../repositories";
+import { assertVerifiedUser } from "../auth/auth.service";
 import { awardPetXpBestEffort } from "../pet/pet.service";
 
 export { DEFAULT_MANNER_SCORE, getMannerGrade, MIN_MATCHING_MANNER_SCORE };
@@ -68,11 +69,7 @@ export async function submitMannerRating(
     throw Object.assign(new Error("Reviewer not found."), { statusCode: 404 });
   }
 
-  if (reviewer.verificationStatus !== "verified") {
-    throw Object.assign(new Error("Verification is required to submit ratings."), {
-      statusCode: 403
-    });
-  }
+  await assertVerifiedUser(reviewerId);
 
   const pendingEvaluation = await repositories.rating.findPendingEvaluation(
     input.matchId,

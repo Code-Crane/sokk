@@ -62,6 +62,7 @@ async function main() {
   const auth = require('../dist/server/services/auth/auth.service');
   const matching = require('../dist/server/services/matching/matching.service');
   const chat = require('../dist/server/services/chat/chat.service');
+  const rating = require('../dist/server/services/rating/rating.service');
   const { isVerificationAcceptedForEnvironment } = require('../dist/server/services/verification/verification-policy');
   const { app } = require('../dist/server/app');
   const server = app.listen(0, '127.0.0.1');
@@ -93,6 +94,32 @@ async function main() {
       }
       await repositories.verification.upsertClaim({ ...claim, provider: 'pass' });
       await auth.assertCanUseMatching(user.id);
+      const peer = await repositories.users.create({ id: 'rating-peer-fixture', email: 'rating-peer@example.invalid', nickname: 'peer', phoneNumber: '', verificationStatus: 'verified', mannerScore: 36.5, mannerGrade: 'regular' });
+      await rating.createPendingEvaluationsForMatch('rating-policy-fixture', [user.id, peer.id]);
+      const ratingInput = { matchId: 'rating-policy-fixture', revieweeId: peer.id, score: 5, tags: ['kind'] };
+      for (const invalid of [null, claim, { ...claim, provider: 'pass', userId: 'other' }, { ...claim, provider: 'pass', status: 'pending' }, { ...claim, provider: 'pass', verifiedAt: 'invalid' }, { ...claim, provider: 'pass', verifiedAt: undefined }]) {
+        const originalClaimLookup = repositories.verification.findClaimByUserId;
+        try {
+          repositories.verification.findClaimByUserId = async () => invalid;
+          await denied(() => rating.submitMannerRating(user.id, ratingInput));
+          assert.equal(await rating.getPendingEvaluationCount(user.id), 1);
+          assert.equal((await repositories.users.findById(peer.id)).mannerScore, 36.5);
+        } finally { repositories.verification.findClaimByUserId = originalClaimLookup; }
+      }
+      await repositories.users.setVerificationStatus(user.id, 'unverified');
+      await denied(() => rating.submitMannerRating(user.id, ratingInput));
+      await repositories.users.setVerificationStatus(user.id, 'verified');
+      const originalClaimLookup = repositories.verification.findClaimByUserId;
+      try {
+        repositories.verification.findClaimByUserId = async () => { throw new Error('fixture lookup unavailable'); };
+        await assert.rejects(() => rating.submitMannerRating(user.id, ratingInput), /fixture lookup unavailable/);
+        assert.equal(await rating.getPendingEvaluationCount(user.id), 1);
+      } finally { repositories.verification.findClaimByUserId = originalClaimLookup; }
+      await assert.rejects(() => rating.submitMannerRating(user.id, { ...ratingInput, score: 6 }), error => error.statusCode === 400);
+      const rated = await rating.submitMannerRating(user.id, ratingInput);
+      assert.ok(rated.nextScore > rated.previousScore);
+      await assert.rejects(() => rating.submitMannerRating(user.id, ratingInput), error => error.statusCode === 404);
+      console.log('[IDENTITY] PASS production rating: real claim required, lookup fail-closed, score and duplicate checks');
       const { requireAdminMfaMiddleware } = require('../dist/server/middleware/adminOnly.middleware');
       let error;
       requireAdminMfaMiddleware({ authClaims: { aal: 'aal1' } }, {}, e => { error = e; });
@@ -108,16 +135,22 @@ async function main() {
       assert.equal(error, undefined);
     } else {
       const users = [];
-      for (const name of ['host', 'guest']) {
+      for (const name of ['host', 'guest', 'outsider']) {
         const session = await auth.signup({ email: `${name}@example.invalid`, nickname: name, phoneNumber: 'fixture' });
         await verification.submitMockVerification(session.user.id, input);
         await auth.assertCanUseMatching(session.user.id);
         assert.ok((await auth.login({ email: `${name}@example.invalid` })).token);
         users.push(session.user.id);
       }
-      const [host, guest] = users;
+      const [host, guest, outsider] = users;
       const post = await matching.createMatchingPost(host, { restaurantName: 'fixture', address: 'fixture', scheduledAt: new Date(Date.now() + 86400000).toISOString(), maxParticipants: 2, intro: 'fixture' });
       const request = await matching.createJoinRequest(guest, post.id);
+      await denied(() => matching.respondToJoinRequest(outsider, request.id, { decision: 'accepted' }));
+      for (const scope of ['matching', 'chat']) {
+        await repositories.blocks.createBlock(host, { blockedId: guest, scope });
+        await denied(() => matching.respondToJoinRequest(host, request.id, { decision: 'accepted' }));
+        await repositories.blocks.revokeBlock(host, guest);
+      }
       await repositories.users.setVerificationStatus(guest, 'unverified');
       await denied(() => matching.respondToJoinRequest(host, request.id, { decision: 'accepted' }));
       assert.equal((await repositories.matching.findJoinRequestById(request.id)).status, 'pending');
@@ -127,9 +160,16 @@ async function main() {
       await denied(() => matching.respondToJoinRequest(host, request.id, { decision: 'accepted' }));
       repositories.sanctions.hasActiveRestriction = originalRestriction;
       const accepted = await matching.respondToJoinRequest(host, request.id, { decision: 'accepted' });
+      assert.equal(accepted.request.status, 'accepted');
+      assert.deepEqual(new Set(accepted.chatRoom.participantIds), new Set([host, guest]));
+      assert.equal((await repositories.chat.listRoomsForUser(outsider)).length, 0);
+      await denied(() => chat.listMessages(outsider, accepted.chatRoom.id));
+      // There is no public room-creation route; membership comes from approved requests.
+      assert.equal((await fetch(`${base}/api/chat/rooms`, { method: 'POST' })).status, 404);
       await repositories.users.setVerificationStatus(guest, 'unverified');
       const recovered = await matching.respondToJoinRequest(host, request.id, { decision: 'accepted' });
       assert.equal(recovered.chatRoom.id, accepted.chatRoom.id);
+      console.log(`[IDENTITY] PASS ${mode}: non-host/block rejected, approved membership and room reuse preserved`);
     }
     console.log(`[IDENTITY] PASS ${mode}: routes, service policy, eligibility and recovery`);
   } finally { await new Promise(resolve => server.close(resolve)); }
